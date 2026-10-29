@@ -596,7 +596,7 @@ if ('serviceWorker' in navigator) {
     }
     try {
       var stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false
       });
       st.stream = stream;
@@ -1180,6 +1180,7 @@ if ('serviceWorker' in navigator) {
       alert('文字認識に失敗しました: ' + err.message);
     }
   });
+
 })();
 </script>
 
