@@ -201,6 +201,19 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 .notes { font-size: 0.86rem; color: var(--muted); }
 .notes ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
 .notes strong { color: var(--fg); }
+
+/* 証券番号: 2桁 - 8桁 - 4桁 */
+.casegroup { display: grid; gap: 6px; font-size: 0.9rem; font-weight: 600; }
+.caserow { display: flex; align-items: flex-start; gap: 6px; }
+.casebox { display: grid; gap: 2px; min-width: 0; }
+.casebox input { text-align: center; font-family: var(--font-data); font-size: 1.05rem; letter-spacing: 0.04em; padding: 0 4px; }
+.casebox-y { flex: 0 0 64px; }
+.casebox-n { flex: 1 1 0; }
+.casebox-b { flex: 0 0 84px; }
+.casedash { line-height: 46px; font-weight: 700; color: var(--muted); }
+.casecap { font-size: 0.72rem; font-weight: 400; color: var(--muted); text-align: center; }
+.casepreview { font-family: var(--font-data); font-size: 0.95rem; padding: 6px 10px; border: 1px dashed var(--line); border-radius: 6px; background: var(--bg); overflow-wrap: anywhere; }
+.casepreview .warn { color: var(--warn); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -268,14 +281,28 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       <section class="panel" aria-label="案件情報">
         <h2>案件情報</h2>
         <div class="fields">
-          <label class="field wide">組合員番号（証券番号）
-  <div style="display: flex; gap: 8px;">
-    <input type="text" id="caseId" autocomplete="off" placeholder="例: 08-12345678-001" style="flex: 1;">
-    <button type="button" id="scanBtn" class="small-btn" style="min-height: 46px; padding: 0 12px;" title="申込書から番号を撮影・読み取り">
-      📸 番号読取
-    </button>
-  </div>
-</label>
+          <div class="field wide casegroup" role="group" aria-labelledby="caseLabel">
+            <span id="caseLabel">組合員番号（証券番号）</span>
+            <div class="caserow">
+              <div class="casebox casebox-y">
+                <input type="text" id="caseY" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="08" aria-label="証券番号の2桁">
+                <span class="casecap">2桁</span>
+              </div>
+              <span class="casedash" aria-hidden="true">-</span>
+              <div class="casebox casebox-n">
+                <input type="text" id="caseN" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="12345678" aria-label="証券番号の8桁">
+                <span class="casecap">8桁(読取の対象)</span>
+              </div>
+              <span class="casedash" aria-hidden="true">-</span>
+              <div class="casebox casebox-b">
+                <input type="text" id="caseB" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0001" aria-label="証券番号の4桁">
+                <span class="casecap">4桁</span>
+              </div>
+            </div>
+            <div class="casepreview" id="casePreview" aria-live="polite"></div>
+            <button type="button" id="scanBtn" class="small-btn" style="justify-self: start;" title="申込書から8桁の番号を撮影・読み取り">📸 8桁の番号を読み取る</button>
+            <p class="small" style="font-weight: 400;">2桁は、令和8年なら 08 と入力します。4桁は、1と入力すると 0001 になります。2桁と4桁は、入力しなくても撮影できます。</p>
+          </div>
 
 
           <div class="field">担当者(ログイン中の職員ID)
@@ -343,7 +370,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.10.30-2';
+  var APP_VERSION = '2026.10.31-1';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -513,61 +540,36 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     var addr = (fix && st.addr && dist(st.addr, fix) < 300 && Date.now() - st.addr.at < 180000) ? st.addr : null;
     return {
       label: label, date: date, fix: fix, addr: addr, addrOn: $('addrOn').checked,
-      caseId: $('caseId').value.trim(), who: st.user || '',
+      caseParts: getCaseParts(), caseId: caseKey(), who: st.user || '',
       seq: parseInt($('seq').value, 10) || 1
     };
   }
-
-
-         function renderHud() {
+  function renderHud() {
     var info = currentInfo('撮影日時', new Date());
     var lines = buildLines(info);
     var hud = $('hud');
     hud.textContent = '';
     lines.forEach(function (l, i) {
       var d = document.createElement('div');
-
-
-      if (i === 1 && !info.fix) {
-        d.className = 'nogps';
-      }
-
-
-      // 組合員番号の行かどうかを判定
-      if (l.indexOf('組合員番号') !== -1) {
-        // 例: "組合員番号 未入力  担当 s-minamitani  No.001" を安全に組み立てる
-        var caseIdVal = info.caseId ? info.caseId : '未入力';
-        var whoVal = info.who ? info.who : '未入力';
-        var seqVal = pad(info.seq);
-
-
-        // ラベル部分
-        var textNode1 = document.createTextNode('組合員番号 ');
-        d.appendChild(textNode1);
-
-
-        // 組合員番号（または未入力）のspan
-        var spanCase = document.createElement('span');
-        spanCase.textContent = caseIdVal;
-        if (!info.caseId) {
-          spanCase.className = 'unentered'; // 未入力のときだけここが点滅する
-        }
-        d.appendChild(spanCase);
-
-
-        // 担当者以降の残りのテキスト
-        var textNode2 = document.createTextNode('  担当 ' + whoVal + '  No.' + seqVal);
-        d.appendChild(textNode2);
-
-
+      if (i === 1 && !info.fix) d.className = 'nogps';
+      if (l.indexOf('組合員番号') === 0) {
+        /* 8桁の欄が空、または8桁になっていないときは、その部分が点滅する */
+        d.appendChild(document.createTextNode('組合員番号 '));
+        caseSegments(info.caseParts).forEach(function (g, k) {
+          if (k > 0) d.appendChild(document.createTextNode('-'));
+          var sp = document.createElement('span');
+          sp.textContent = g.t;
+          if (g.warn) sp.className = 'unentered';
+          d.appendChild(sp);
+        });
+        d.appendChild(document.createTextNode('  担当 ' + (info.who || '未入力') + '  No.' + pad(info.seq)));
       } else {
         d.textContent = l;
       }
-
-
       hud.appendChild(d);
     });
   }
+
   /* ---------- 位置情報 ---------- */
   function startGeo() {
     if (!navigator.geolocation) { st.geoState = 'unsupported'; renderStatus(); return; }
@@ -613,13 +615,18 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   }
 
   async function startCamera() {
-/* 撮影の前に、いま入力されている番号を見せて確認する */
-    var cur = $('caseId').value.trim();
-    var msg = cur
-      ? '組合員番号（証券番号）は、次の番号で間違いありませんか？\n\n' + cur + '\n\n[OK] カメラを起動します\n[キャンセル] 入力欄に戻ります'
-      : '組合員番号（証券番号）が未入力です。\n\n[OK] 未入力のまま撮影します（写真に「未入力」と焼き付きます）\n[キャンセル] 入力欄に戻ります';
+/* 撮影の前に、いま入力されている番号を見せて確認する。警告は、8桁の欄が対象 */
+    var cp = getCaseParts();
+    var msg;
+    if (cp.n.length === 8) {
+      msg = '組合員番号（証券番号）は、次の番号で間違いありませんか？\n\n' + caseText(cp) + '\n\n[OK] カメラを起動します\n[キャンセル] 入力欄に戻ります';
+    } else if (!cp.n) {
+      msg = '組合員番号の8桁が未入力です。\n\n[OK] 未入力のまま撮影します（写真に「未入力」と焼き付きます）\n[キャンセル] 入力欄に戻ります';
+    } else {
+      msg = '組合員番号の8桁が、8桁になっていません（' + cp.n + '）。\n\n[OK] このまま撮影します\n[キャンセル] 入力欄に戻ります';
+    }
     if (!window.confirm(msg)) {
-      $('caseId').focus();
+      $('caseN').focus();
       return;
     }
     notice('');
@@ -896,7 +903,16 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   $('csvBtn').addEventListener('click', saveCsv);
   $('allowNoGps').addEventListener('change', renderStatus);
   $('addrOn').addEventListener('change', function () { saveForm(); st.addrErr = false; renderStatus(); lookupAddr(); });
-  $('caseId').addEventListener('change', function () { setCaseId($('caseId').value); });
+  ['caseY', 'caseN', 'caseB'].forEach(function (id) {
+    $(id).addEventListener('input', function (ev) {
+      if (ev.isComposing) return;
+      var el = $(id);
+      var cleaned = digits(el.value, el.maxLength);
+      if (el.value !== cleaned) el.value = cleaned;
+      updateCasePreview();
+    });
+    $(id).addEventListener('change', normalizeCaseBoxes);
+  });
 
 
   window.addEventListener('beforeunload', function (e) {
@@ -969,20 +985,11 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       return;
     }
     /* 新しいログインでは、前の案件の番号を持ち越さない */
-    $('caseId').value = '';
-    st.lastCase = '';
-    $('seq').value = 1;
-    notice('⚠️ 撮影を始める前に、必ず「組合員番号（証券番号）」を入力してください。');
+    clearCase();
+    notice('⚠️ 撮影を始める前に、必ず「組合員番号（証券番号）」の8桁の番号を入力してください。');
     render();
     renderStatus();
-    setTimeout(function () {
-      var caseInput = $('caseId');
-      if (caseInput) {
-        caseInput.focus();
-        caseInput.classList.add('highlight-focus');
-        setTimeout(function () { caseInput.classList.remove('highlight-focus'); }, 3000);
-      }
-    }, 100);
+    setTimeout(flashCaseN, 100);
   }
   async function onLogin(ev) {
     ev.preventDefault();
@@ -1035,8 +1042,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     st.photos.forEach(function (p) { URL.revokeObjectURL(p.url); });
     st.photos = [];
     st.user = null; st.lockedUser = null; st.logoutArm = false;
-    $('caseId').value = ''; st.lastCase = '';
-    $('seq').value = 1;
+    clearCase();
     $('logoutBtn').textContent = 'ログアウト';
     notice('');
     render();
@@ -1085,11 +1091,64 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   var scanVideo = $('scanVideo');
   var scanStream = null, scanBusy = false, tessLoading = null;
 
-  /* 番号を入れる入口を1つにまとめる。番号が変わったときは、通し番号を1に戻す。 */
-  function setCaseId(v) {
-    var val = String(v == null ? '' : v).trim();
-    $('caseId').value = val;
-    if (val !== st.lastCase) { $('seq').value = 1; st.lastCase = val; }
+  /* ---------- 証券番号(2桁 - 8桁 - 4桁) ---------- */
+  /* 全角の数字も半角にそろえて、数字だけを残す */
+  function digits(v, max) {
+    var t = String(v == null ? '' : v).replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
+    return t.replace(/[^0-9]/g, '').slice(0, max);
+  }
+
+  /* 2桁と4桁は、入力があれば、0を足して桁をそろえる(8 → 08、1 → 0001)。8桁は、そのまま。 */
+  function getCaseParts() {
+    var y = digits($('caseY').value, 2), n = digits($('caseN').value, 8), b = digits($('caseB').value, 4);
+    return { y: y ? pad(y, 2) : '', n: n, b: b ? pad(b, 4) : '' };
+  }
+
+  /* 画面・写真・ファイル名に使う並び。入力のある欄だけを、ハイフンでつなぐ。8桁がないときは「未入力」を入れる。 */
+  function caseSegments(p) {
+    var segs = [];
+    if (p.y) segs.push({ t: p.y, warn: false });
+    segs.push(p.n ? { t: p.n, warn: p.n.length !== 8 } : { t: '未入力', warn: true });
+    if (p.b) segs.push({ t: p.b, warn: false });
+    return segs;
+  }
+  function caseText(p) { return caseSegments(p).map(function (g) { return g.t; }).join('-'); }
+  function caseEntered(p) { return !!(p.y || p.n || p.b); }
+  function caseKey() { var p = getCaseParts(); return caseEntered(p) ? caseText(p) : ''; }
+
+  function updateCasePreview() {
+    var box = $('casePreview');
+    box.textContent = '';
+    box.appendChild(document.createTextNode('表示: '));
+    caseSegments(getCaseParts()).forEach(function (g, k) {
+      if (k > 0) box.appendChild(document.createTextNode('-'));
+      var sp = document.createElement('span');
+      sp.textContent = g.t;
+      if (g.warn) sp.className = 'warn';
+      box.appendChild(sp);
+    });
+  }
+
+  /* 欄の入力が終わったとき。桁をそろえて表示し、案件が変わったら通し番号を1に戻す。 */
+  function normalizeCaseBoxes() {
+    var p = getCaseParts();
+    $('caseY').value = p.y; $('caseN').value = p.n; $('caseB').value = p.b;
+    var key = caseEntered(p) ? caseText(p) : '';
+    if (key !== st.lastCase) { $('seq').value = 1; st.lastCase = key; }
+    updateCasePreview();
+  }
+
+  function clearCase() {
+    $('caseY').value = ''; $('caseN').value = ''; $('caseB').value = '';
+    st.lastCase = '';
+    $('seq').value = 1;
+    updateCasePreview();
+  }
+
+  /* 番号読取の結果は、8桁の欄にだけ入れる */
+  function setCaseN(v) {
+    $('caseN').value = digits(v, 8);
+    normalizeCaseBoxes();
   }
 
   function loadTesseract() {
@@ -1153,8 +1212,8 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     return null;
   }
 
-  function flashCaseId() {
-    var ci = $('caseId');
+  function flashCaseN() {
+    var ci = $('caseN');
     ci.focus();
     ci.classList.add('highlight-focus');
     setTimeout(function () { ci.classList.remove('highlight-focus'); }, 3000);
@@ -1215,9 +1274,9 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     $('scanCaptureBtn').disabled = false;
     var found = extractNumber(text);
     if (found && found.value) {
-      setCaseId(found.value);
-      notice('読み取った8桁の番号「' + found.value + '」を入力しました。申込書と見比べて、必ず確認してください。');
-      flashCaseId();
+      setCaseN(found.value);
+      notice('読み取った8桁の番号「' + found.value + '」を、8桁の欄に入力しました。申込書と見比べて、必ず確認してください。');
+      flashCaseN();
     } else if (found && found.many) {
       notice('8桁の数字が複数見つかりました。枠の中に、読み取りたい番号だけが入るように合わせて、もう一度撮影してください。');
     } else {
@@ -1261,6 +1320,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   setTimeout(checkUpdate, 3000);
 
   loadForm();
+  updateCasePreview();
   render();
   renderStatus();
   setInterval(renderStatus, 1000);
