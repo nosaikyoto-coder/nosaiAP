@@ -204,6 +204,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 </style>
 </head>
 <body>
+<div class="banner" id="updateBar" role="status" hidden style="margin: 12px max(16px, env(safe-area-inset-left, 0px)) 0;"></div>
 <main class="login" id="loginRoot">
   <form class="panel" id="loginForm" autocomplete="off">
     <div>
@@ -308,7 +309,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       <li>写真は「保存」を押したときにダウンロード先へ保存されます。<strong>未保存の写真はページを閉じると失われます。</strong></li>
       <li>撮影記録CSVには、各写真の日時・緯度経度・精度・SHA-256(改ざん確認用の値)が入ります。CSVは写真とは別の場所にも保管してください。</li>
       <li>写真は外部へ送信しません。「市区町村名を焼き付ける」をオンにした場合だけ、現在地の緯度経度(小数点以下4桁)を国土地理院のサービスに送ります。写真の保存先への移動は、組合の定めた手順で行ってください。</li>
-      <li>組合員番号は、申込書と見比べて、必ず確認してください。番号の読取は通信が必要で、読み間違えることがあります。</li>
+      <li>組合員番号は、申込書と見比べて、必ず確認してください。番号の読取は、8桁の数字だけを対象にした補助の機能で、通信が必要です。通信がないときは、手で入力してください。</li>
       <li>アプリの版: <span id="verApp"></span></li>
     </ul>
   </section>
@@ -324,7 +325,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     <div style="position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;">
       <div id="scanGuideBox" style="width: 85%; height: 60px; border: 2px solid #5ec99b; border-radius: 6px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); position: relative;">
         <div style="position: absolute; top: -26px; left: 0; color: #5ec99b; font-size: 0.8rem; font-weight: bold; background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; white-space: nowrap;">
-          枠内に番号を合わせてください
+          8桁の番号だけを枠に合わせてください
         </div>
       </div>
     </div>
@@ -342,7 +343,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.10.30-1';
+  var APP_VERSION = '2026.10.30-2';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -1118,6 +1119,10 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 
   async function openScan() {
     if (scanBusy) return;
+    if (navigator.onLine === false) {
+      notice('通信がないため、番号の読取は使えません。番号は手で入力してください。');
+      return;
+    }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       notice('このブラウザでは番号の撮影を使えません。番号を手で入力してください。');
       return;
@@ -1139,12 +1144,12 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     }
   }
 
+  /* 8桁の数字がちょうど1つ見つかったときだけ採用する。それ以外の数字(桁数が違うもの)は無視する。 */
   function extractNumber(text) {
-    var t = String(text || '').replace(/[\s\u3000]/g, '');
-    var full = t.match(/\d{2}-\d{7,8}-\d{3}/);
-    if (full) return { value: full[0], full: true };
-    var part = t.match(/\d{7,8}/);
-    if (part) return { value: part[0], full: false };
+    var runs = String(text || '').match(/\d+/g) || [];
+    var eights = runs.filter(function (r) { return r.length === 8; });
+    if (eights.length === 1) return { value: eights[0] };
+    if (eights.length > 1) return { many: true };
     return null;
   }
 
@@ -1209,13 +1214,14 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     scanBusy = false;
     $('scanCaptureBtn').disabled = false;
     var found = extractNumber(text);
-    if (found) {
+    if (found && found.value) {
       setCaseId(found.value);
-      notice('読み取った番号「' + found.value + '」を入力しました。申込書と見比べて、必ず確認してください。' +
-             (found.full ? '' : '(一部の桁だけを読み取った可能性があります。形式を確認してください)'));
+      notice('読み取った8桁の番号「' + found.value + '」を入力しました。申込書と見比べて、必ず確認してください。');
       flashCaseId();
+    } else if (found && found.many) {
+      notice('8桁の数字が複数見つかりました。枠の中に、読み取りたい番号だけが入るように合わせて、もう一度撮影してください。');
     } else {
-      notice('番号を読み取れませんでした。枠いっぱいに番号を合わせ、明るい場所でもう一度撮影するか、手で入力してください。');
+      notice('8桁の番号を読み取れませんでした。枠いっぱいに番号を合わせ、明るい場所でもう一度撮影するか、手で入力してください。');
     }
   }
 
@@ -1228,9 +1234,31 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   $('verApp').textContent = APP_VERSION;
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./service-worker.js').catch(function () { /* 登録できなくても通常どおり使える */ });
+      navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' }).catch(function () { /* 登録できなくても通常どおり使える */ });
     });
   }
+
+  /* 新しい版が公開されていないか確認する。通信できるときだけ。見つけたら、画面の上に案内を出す(自動では切り替えない)。 */
+  function checkUpdate() {
+    if (navigator.onLine === false) return;
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 8000);
+    fetch('./index.html', { cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (t) {
+        var m = /var APP_VERSION = '([^']+)'/.exec(t || '');
+        if (m && m[1] !== APP_VERSION) {
+          var bar = $('updateBar');
+          bar.textContent = '新しい版(' + m[1] + ')があります。未保存の写真を保存してから、アプリを開き直してください。';
+          bar.hidden = false;
+        }
+      })
+      .catch(function () { /* 通信できないときは何もしない */ })
+      .then(function () { clearTimeout(timer); });
+  }
+  window.addEventListener('online', checkUpdate);
+  setInterval(checkUpdate, 30 * 60 * 1000);
+  setTimeout(checkUpdate, 3000);
 
   loadForm();
   render();
