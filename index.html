@@ -1,20 +1,16 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.jpeg" type="image/jpeg">
-<link rel="apple-touch-icon" href="icon.jpeg">
-
-
-<meta name="theme-color" content="#1e8f27">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#1e8f27">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.jpeg" type="image/jpeg">
+<link rel="apple-touch-icon" href="icon.jpeg">
 <title>現場写真記録</title>
-
-
 <style>
 /* 組合員番号入力欄の強調表示 */
 .highlight-focus {
@@ -207,22 +203,6 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 .notes strong { color: var(--fg); }
 </style>
 </head>
-
-
-<!-- ★ Service Workerのスクリプトは <style> の外（下）に出します -->
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./service-worker.js')
-    .then(() => console.log('Service Worker OK'))
-    .catch(err => console.log(err));
-}
-</script>
-
-
-</head>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
-
-
 <body>
 <main class="login" id="loginRoot">
   <form class="panel" id="loginForm" autocomplete="off">
@@ -239,6 +219,7 @@ if ('serviceWorker' in navigator) {
     <div class="banner bad" id="loginMsg" role="alert" hidden></div>
     <button class="primary" type="submit" id="loginBtn">ログイン</button>
   </form>
+  <p class="small" id="verLogin" style="text-align:center"></p>
 </main>
 
 
@@ -327,14 +308,43 @@ if ('serviceWorker' in navigator) {
       <li>写真は「保存」を押したときにダウンロード先へ保存されます。<strong>未保存の写真はページを閉じると失われます。</strong></li>
       <li>撮影記録CSVには、各写真の日時・緯度経度・精度・SHA-256(改ざん確認用の値)が入ります。CSVは写真とは別の場所にも保管してください。</li>
       <li>写真は外部へ送信しません。「市区町村名を焼き付ける」をオンにした場合だけ、現在地の緯度経度(小数点以下4桁)を国土地理院のサービスに送ります。写真の保存先への移動は、組合の定めた手順で行ってください。</li>
+      <li>組合員番号は、申込書と見比べて、必ず確認してください。番号の読取は通信が必要で、読み間違えることがあります。</li>
+      <li>アプリの版: <span id="verApp"></span></li>
     </ul>
   </section>
 </div>
 
 
+<div id="scanModal" role="dialog" aria-modal="true" aria-label="組合員番号の読み取り" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 16px;">
+  <div style="position: relative; width: 100%; max-width: 500px; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+    <video id="scanVideo" autoplay playsinline muted style="width: 100%; height: auto; display: block;"></video>
+
+
+    <!-- 8桁の番号を合わせるためのガイド枠（サイズを調整） -->
+    <div style="position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;">
+      <div id="scanGuideBox" style="width: 85%; height: 60px; border: 2px solid #5ec99b; border-radius: 6px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); position: relative;">
+        <div style="position: absolute; top: -26px; left: 0; color: #5ec99b; font-size: 0.8rem; font-weight: bold; background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; white-space: nowrap;">
+          枠内に番号を合わせてください
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div style="display: flex; gap: 12px; margin-top: 16px; width: 100%; max-width: 500px; justify-content: center;">
+    <button type="button" id="scanCaptureBtn" class="primary" style="flex: 1; min-height: 50px;">撮影して番号を読み取る</button>
+    <button type="button" id="scanCloseBtn" style="min-height: 50px; padding: 0 20px;">キャンセル</button>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
+
+  /* アプリの版。内容を直したら、日付と枝番を更新する。 */
+  var APP_VERSION = '2026.10.30-1';
+  /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
+  var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
 
   var FONT = '"Hiragino Sans","Yu Gothic UI","Noto Sans JP","Meiryo",system-ui,sans-serif';
@@ -344,7 +354,7 @@ if ('serviceWorker' in navigator) {
 
 
   var $ = function (id) { return document.getElementById(id); };
-  var st = { stream: null, fix: null, watchId: null, geoState: 'idle', photos: [], wake: null, busy: false };
+  var st = { stream: null, fix: null, watchId: null, geoState: 'idle', photos: [], wake: null, busy: false, lastCase: '' };
 
 
   /* ---------- 時刻 ---------- */
@@ -580,14 +590,37 @@ if ('serviceWorker' in navigator) {
 
 
   /* ---------- カメラ ---------- */
-  async function startCamera() {
-// ★ ここから追加
-  var isEntered = window.confirm('組合員番号（証券番号）の入力はしましたか？\n\n[ok] カメラを起動します\n[cancel] 入力欄に戻ります');
-  if (!isEntered) {
-    $('caseId').focus(); // 入力欄にカーソルを合わせる
-    return; // カメラを起動せずにストップする
+  /* 背面カメラを優先する。背面カメラの指定が通らない端末では、指定をゆるめて、もう一度試す。 */
+  async function getCameraStream(hiRes) {
+    var size = hiRes ? { width: { ideal: 1920 }, height: { ideal: 1080 } } : {};
+    var tries = [
+      Object.assign({ facingMode: { exact: 'environment' } }, size),
+      Object.assign({ facingMode: { ideal: 'environment' } }, size),
+      true
+    ];
+    var lastErr = null;
+    for (var i = 0; i < tries.length; i++) {
+      try {
+        return await navigator.mediaDevices.getUserMedia({ video: tries[i], audio: false });
+      } catch (e) {
+        lastErr = e;
+        var n = e && e.name;
+        if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'NotReadableError') throw e;
+      }
+    }
+    throw lastErr;
   }
-  // 
+
+  async function startCamera() {
+/* 撮影の前に、いま入力されている番号を見せて確認する */
+    var cur = $('caseId').value.trim();
+    var msg = cur
+      ? '組合員番号（証券番号）は、次の番号で間違いありませんか？\n\n' + cur + '\n\n[OK] カメラを起動します\n[キャンセル] 入力欄に戻ります'
+      : '組合員番号（証券番号）が未入力です。\n\n[OK] 未入力のまま撮影します（写真に「未入力」と焼き付きます）\n[キャンセル] 入力欄に戻ります';
+    if (!window.confirm(msg)) {
+      $('caseId').focus();
+      return;
+    }
     notice('');
     startGeo();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -595,10 +628,7 @@ if ('serviceWorker' in navigator) {
       return;
     }
     try {
-      var stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false
-      });
+      var stream = await getCameraStream(true);
       st.stream = stream;
       var v = $('video');
       v.srcObject = stream;
@@ -721,42 +751,53 @@ if ('serviceWorker' in navigator) {
 
 
     /* ---------- 保存 ---------- */
+  function isIOS() {
+    return /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  /* 端末へ渡せたら true、利用者が途中でやめたら false を返す */
   async function download(blob, name) {
-    // iPhoneやiPad（iOS / iPadOS）かどうかを判別する
-    var isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-
-    // iOSのときだけ、ダウンロードブロック回避の共有機能を使う
-    if (isIOS && navigator.share && navigator.canShare && blob instanceof Blob) {
+    if (isIOS() && navigator.share && navigator.canShare && blob instanceof Blob) {
       try {
-        var file = new File([blob], name, { type: blob.type });
+        var file = new File([blob], name, { type: blob.type || 'application/octet-stream' });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: name
-          });
-          return;
+          await navigator.share({ files: [file], title: name });
+          return true;
         }
       } catch (e) {
-        if (e.name === 'AbortError') return;
+        if (e && e.name === 'AbortError') return false;
       }
     }
-
-
-    // AndroidやWindowsタブレット、PCなどは、通常のダウンロード処理を行う
-    var url = (typeof blob === 'string') ? blob : URL.createObjectURL(blob);
+    var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
-    if (typeof blob !== 'string') setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    return true;
   }
 
+  async function savePhoto(p) {
+    var ok = await download(p.blob, p.filename);
+    if (ok) { p.saved = true; render(); }
+  }
 
-  function savePhoto(p) { download(p.url, p.filename); p.saved = true; render(); }
-
-
-  function saveAll() {
+  async function saveAll() {
     var todo = st.photos.filter(function (p) { return !p.saved; });
+    if (!todo.length) return;
+    if (isIOS() && navigator.share && navigator.canShare) {
+      /* iPhone・iPadは、操作の直後でないと共有メニューが開かないので、まとめて1回で渡す */
+      try {
+        var files = todo.map(function (p) { return new File([p.blob], p.filename, { type: 'image/jpeg' }); });
+        if (navigator.canShare({ files: files })) {
+          await navigator.share({ files: files });
+          todo.forEach(function (p) { p.saved = true; });
+          render();
+          return;
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
     todo.forEach(function (p, i) { setTimeout(function () { savePhoto(p); }, i * 500); });
   }
 
@@ -771,7 +812,7 @@ if ('serviceWorker' in navigator) {
 
 
   function saveCsv() {
-    var head = ['連番', 'ファイル名', '整理番号', '担当者', '方法', '日時(日本時間)', 'GPS時刻(日本時間)', '緯度', '経度', '精度(m)', '所在地(市区町村)', 'SHA-256', '地図URL'];
+    var head = ['連番', 'ファイル名', '組合員番号', '担当者', '方法', '日時(日本時間)', 'GPS時刻(日本時間)', '緯度', '経度', '精度(m)', '所在地(市区町村)', 'SHA-256', '地図URL', 'アプリ版'];
     var rows = [head.join(',')];
     st.photos.forEach(function (p) {
       var f = p.fix;
@@ -781,7 +822,8 @@ if ('serviceWorker' in navigator) {
         fmtJst(p.date), f ? fmtJst(new Date(f.ts)) : '',
         f ? f.lat.toFixed(6) : '位置情報なし', f ? f.lon.toFixed(6) : '', f ? String(Math.round(f.acc)) : '',
         csvText(p.addr),
-        p.sha, f ? 'https://www.google.com/maps?q=' + f.lat.toFixed(6) + ',' + f.lon.toFixed(6) : ''
+        p.sha, f ? 'https://www.google.com/maps?q=' + f.lat.toFixed(6) + ',' + f.lon.toFixed(6) : '',
+        csvText(APP_VERSION)
       ].join(','));
     });
     var blob = new Blob(['﻿' + rows.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
@@ -836,12 +878,11 @@ if ('serviceWorker' in navigator) {
   function loadForm() {
     try {
       var s = JSON.parse(localStorage.getItem('genbaPhoto') || '{}');
-      if (s.caseId) $('caseId').value = s.caseId;
       if (s.addrOn) $('addrOn').checked = true;
     } catch (e) { /* 記憶なしで続行 */ }
   }
   function saveForm() {
-    try { localStorage.setItem('genbaPhoto', JSON.stringify({ caseId: $('caseId').value, addrOn: $('addrOn').checked })); } catch (e) { /* 無視 */ }
+    try { localStorage.setItem('genbaPhoto', JSON.stringify({ addrOn: $('addrOn').checked })); } catch (e) { /* 無視 */ }
   }
 
 
@@ -854,7 +895,7 @@ if ('serviceWorker' in navigator) {
   $('csvBtn').addEventListener('click', saveCsv);
   $('allowNoGps').addEventListener('change', renderStatus);
   $('addrOn').addEventListener('change', function () { saveForm(); st.addrErr = false; renderStatus(); lookupAddr(); });
-  $('caseId').addEventListener('change', function () { $('seq').value = 1; saveForm(); });
+  $('caseId').addEventListener('change', function () { setCaseId($('caseId').value); });
 
 
   window.addEventListener('beforeunload', function (e) {
@@ -914,28 +955,31 @@ if ('serviceWorker' in navigator) {
   }
 
 
-  function showApp() {
+  function showApp(resumed) {
     $('loginRoot').hidden = true;
     $('appRoot').hidden = false;
     $('whoShow').textContent = st.user;
     st.lastAct = Date.now();
-   // ★ アプリ起動時に組合員番号の入力を促すアラームを表示
+    if (resumed) {
+      /* 画面ロックからの再開では、入力中の案件をそのまま残す */
+      notice('');
+      render();
+      renderStatus();
+      return;
+    }
+    /* 新しいログインでは、前の案件の番号を持ち越さない */
+    $('caseId').value = '';
+    st.lastCase = '';
+    $('seq').value = 1;
     notice('⚠️ 撮影を始める前に、必ず「組合員番号（証券番号）」を入力してください。');
     render();
     renderStatus();
-
-
-  // ★ ここを追加：組合員番号入力欄にフォーカスを合わせ、強調効果をつける
     setTimeout(function () {
       var caseInput = $('caseId');
       if (caseInput) {
         caseInput.focus();
-        // 強調表示用のクラスを付与
         caseInput.classList.add('highlight-focus');
-        // 3秒後に強調表示を自然に解除
-        setTimeout(function () {
-          caseInput.classList.remove('highlight-focus');
-        }, 3000);
+        setTimeout(function () { caseInput.classList.remove('highlight-focus'); }, 3000);
       }
     }, 100);
   }
@@ -961,8 +1005,9 @@ if ('serviceWorker' in navigator) {
         st.user = id;
         $('pw').value = '';
         if (st.lockedUser && st.lockedUser !== id) { return; }
+        var resumed = !!st.lockedUser;
         st.lockedUser = null;
-        showApp();
+        showApp(resumed);
       } else {
         st.fails = (st.fails || 0) + 1;
         if (st.fails >= FAIL_LIMIT) {
@@ -989,6 +1034,7 @@ if ('serviceWorker' in navigator) {
     st.photos.forEach(function (p) { URL.revokeObjectURL(p.url); });
     st.photos = [];
     st.user = null; st.lockedUser = null; st.logoutArm = false;
+    $('caseId').value = ''; st.lastCase = '';
     $('seq').value = 1;
     $('logoutBtn').textContent = 'ログアウト';
     notice('');
@@ -1033,6 +1079,159 @@ if ('serviceWorker' in navigator) {
   $('logoutBtn').addEventListener('click', onLogoutClick);
 
 
+  /* ---------- 組合員番号の読取(OCR) ---------- */
+  var scanModal = $('scanModal');
+  var scanVideo = $('scanVideo');
+  var scanStream = null, scanBusy = false, tessLoading = null;
+
+  /* 番号を入れる入口を1つにまとめる。番号が変わったときは、通し番号を1に戻す。 */
+  function setCaseId(v) {
+    var val = String(v == null ? '' : v).trim();
+    $('caseId').value = val;
+    if (val !== st.lastCase) { $('seq').value = 1; st.lastCase = val; }
+  }
+
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (tessLoading) return tessLoading;
+    tessLoading = new Promise(function (resolve, reject) {
+      var sc = document.createElement('script');
+      sc.src = TESS_URL;
+      sc.onload = function () {
+        if (window.Tesseract) resolve(window.Tesseract);
+        else { tessLoading = null; reject(new Error('load')); }
+      };
+      sc.onerror = function () { tessLoading = null; reject(new Error('load')); };
+      document.head.appendChild(sc);
+    });
+    return tessLoading;
+  }
+
+  function stopScanCamera() {
+    if (scanStream) {
+      scanStream.getTracks().forEach(function (t) { t.stop(); });
+      scanStream = null;
+    }
+    scanVideo.srcObject = null;
+    scanModal.style.display = 'none';
+  }
+
+  async function openScan() {
+    if (scanBusy) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      notice('このブラウザでは番号の撮影を使えません。番号を手で入力してください。');
+      return;
+    }
+    if (st.stream) {
+      /* 同じカメラを2つ同時には開けない端末があるので、撮影用のカメラは止める */
+      stopCamera();
+      notice('番号の読み取りが終わったら、もう一度「カメラを開始」を押してください。');
+    }
+    scanModal.style.display = 'flex';
+    $('scanCaptureBtn').disabled = false;
+    try {
+      scanStream = await getCameraStream(false);
+      scanVideo.srcObject = scanStream;
+      try { await scanVideo.play(); } catch (e) { /* autoplay に任せる */ }
+    } catch (err) {
+      stopScanCamera();
+      notice('番号読取のカメラを起動できませんでした(' + (err && err.name ? err.name : '不明なエラー') + ')。番号を手で入力してください。');
+    }
+  }
+
+  function extractNumber(text) {
+    var t = String(text || '').replace(/[\s\u3000]/g, '');
+    var full = t.match(/\d{2}-\d{7,8}-\d{3}/);
+    if (full) return { value: full[0], full: true };
+    var part = t.match(/\d{7,8}/);
+    if (part) return { value: part[0], full: false };
+    return null;
+  }
+
+  function flashCaseId() {
+    var ci = $('caseId');
+    ci.focus();
+    ci.classList.add('highlight-focus');
+    setTimeout(function () { ci.classList.remove('highlight-focus'); }, 3000);
+  }
+
+  async function runScan() {
+    if (scanBusy || !scanVideo.videoWidth) return;
+    scanBusy = true;
+    $('scanCaptureBtn').disabled = true;
+    var cropCanvas = null;
+    try {
+      var vw = scanVideo.videoWidth, vh = scanVideo.videoHeight;
+      var canvas = document.createElement('canvas');
+      canvas.width = vw; canvas.height = vh;
+      canvas.getContext('2d').drawImage(scanVideo, 0, 0);
+      /* 画面上のガイド枠の位置に合わせて切り出す */
+      var rect = $('scanGuideBox').getBoundingClientRect();
+      var vr = scanVideo.getBoundingClientRect();
+      var sx = vw / vr.width, sy = vh / vr.height;
+      var cx = Math.max(0, (rect.left - vr.left) * sx);
+      var cy = Math.max(0, (rect.top - vr.top) * sy);
+      var cw = Math.min(vw - cx, rect.width * sx);
+      var ch = Math.min(vh - cy, rect.height * sy);
+      if (cw < 10 || ch < 10) throw new Error('crop');
+      cropCanvas = document.createElement('canvas');
+      cropCanvas.width = Math.round(cw);
+      cropCanvas.height = Math.round(ch);
+      cropCanvas.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cropCanvas.width, cropCanvas.height);
+    } catch (e) {
+      scanBusy = false;
+      $('scanCaptureBtn').disabled = false;
+      notice('写真の切り出しに失敗しました。もう一度、枠に番号を合わせて撮影してください。');
+      return;
+    }
+    stopScanCamera();
+    notice('申込書の番号を読み取っています…(数秒かかります。通信が必要です)');
+    var text = '';
+    try {
+      var T = await loadTesseract();
+      var worker = await T.createWorker('eng');
+      try {
+        await worker.setParameters({
+          tessedit_char_whitelist: '0123456789-',
+          tessedit_pageseg_mode: (T.PSM && T.PSM.SINGLE_LINE) || '7'
+        });
+        var result = await worker.recognize(cropCanvas);
+        text = result && result.data ? result.data.text : '';
+      } finally {
+        try { await worker.terminate(); } catch (e2) { /* 無視 */ }
+      }
+    } catch (err) {
+      scanBusy = false;
+      $('scanCaptureBtn').disabled = false;
+      notice('番号を読み取れませんでした。通信状態を確認して、もう一度お試しください。番号は手で入力することもできます。');
+      return;
+    }
+    scanBusy = false;
+    $('scanCaptureBtn').disabled = false;
+    var found = extractNumber(text);
+    if (found) {
+      setCaseId(found.value);
+      notice('読み取った番号「' + found.value + '」を入力しました。申込書と見比べて、必ず確認してください。' +
+             (found.full ? '' : '(一部の桁だけを読み取った可能性があります。形式を確認してください)'));
+      flashCaseId();
+    } else {
+      notice('番号を読み取れませんでした。枠いっぱいに番号を合わせ、明るい場所でもう一度撮影するか、手で入力してください。');
+    }
+  }
+
+  $('scanBtn').addEventListener('click', openScan);
+  $('scanCloseBtn').addEventListener('click', stopScanCamera);
+  $('scanCaptureBtn').addEventListener('click', runScan);
+
+  /* ---------- 起動 ---------- */
+  $('verLogin').textContent = '版 ' + APP_VERSION;
+  $('verApp').textContent = APP_VERSION;
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./service-worker.js').catch(function () { /* 登録できなくても通常どおり使える */ });
+    });
+  }
+
   loadForm();
   render();
   renderStatus();
@@ -1042,147 +1241,4 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 </body>
-<!-- ▼ 申込書番号スキャン用の画面とプログラムを追加 ▼ -->
-
-
-<!-- 申込書番号スキャン用モーダル -->
-<div id="scanModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 16px;">
-  <div style="position: relative; width: 100%; max-width: 500px; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-    <video id="scanVideo" autoplay playsinline muted style="width: 100%; height: auto; display: block;"></video>
-
-
-    <!-- 8桁の番号を合わせるためのガイド枠（サイズを調整） -->
-    <div style="position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;">
-      <div id="scanGuideBox" style="width: 85%; height: 60px; border: 2px solid #5ec99b; border-radius: 6px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); position: relative;">
-        <div style="position: absolute; top: -26px; left: 0; color: #5ec99b; font-size: 0.8rem; font-weight: bold; background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; white-space: nowrap;">
-          枠内に番号を合わせてください
-        </div>
-      </div>
-    </div>
-  </div>
-
-
-  <div style="display: flex; gap: 12px; margin-top: 16px; width: 100%; max-width: 500px; justify-content: center;">
-    <button type="button" id="scanCaptureBtn" class="primary" style="flex: 1; min-height: 50px;">撮影して番号を読み取る</button>
-    <button type="button" id="scanCloseBtn" style="min-height: 50px; padding: 0 20px;">キャンセル</button>
-  </div>
-</div>
-
-
-<script>
-// --- 組合員番号スキャン＆OCR読み取り機能 ---
-(function() {
-  var scanModal = document.getElementById('scanModal');
-  var scanVideo = document.getElementById('scanVideo');
-  var scanStream = null;
-
-
-  document.getElementById('scanBtn').addEventListener('click', async function() {
-    scanModal.style.display = 'flex';
-    try {
-      scanStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false
-      });
-      scanVideo.srcObject = scanStream;
-    } catch (err) {
-      alert('カメラを起動できませんでした: ' + err.message);
-      scanModal.style.display = 'none';
-    }
-  });
-
-
-  document.getElementById('scanCloseBtn').addEventListener('click', function() {
-    stopScanCamera();
-  });
-
-
-  function stopScanCamera() {
-    if (scanStream) {
-      scanStream.getTracks().forEach(function(track) { track.stop(); });
-      scanStream = null;
-    }
-    scanModal.style.display = 'none';
-  }
-
-
-  // 撮影してOCRで文字認識する処理
-  document.getElementById('scanCaptureBtn').addEventListener('click', async function() {
-    if (!scanVideo.videoWidth) return;
-
-
-    var video = scanVideo;
-    var canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    var ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-
-
-    // 画面上のガイド枠の位置に合わせて切り出し
-    var rect = document.getElementById('scanGuideBox').getBoundingClientRect();
-    var videoRect = video.getBoundingClientRect();
-
-
-    var scaleX = canvas.width / videoRect.width;
-    var scaleY = canvas.height / videoRect.height;
-
-
-    var cropX = (rect.left - videoRect.left) * scaleX;
-    var cropY = (rect.top - videoRect.top) * scaleY;
-    var cropW = rect.width * scaleX;
-    var cropH = rect.height * scaleY;
-
-
-    var cropCanvas = document.createElement('canvas');
-    cropCanvas.width = cropW;
-    cropCanvas.height = cropH;
-    cropCanvas.getContext('2d').drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-
-    stopScanCamera();
-
-
-    // 読み取り中のアラート（安全に表示）
-    alert('申込書の番号を読み取っています…（数秒かかります）');
-
-
-    try {
-      // Tesseract.jsで文字認識を実行
-      var result = await Tesseract.recognize(
-        cropCanvas,
-        'eng', // 数字特化の英語モード
-        {
-          logger: m => console.log(m)
-        }
-      );
-
-
-      var text = result.data.text;
-      console.log('OCR認識結果:', text);
-
-
-      // 7桁または8桁の数字を抽出
-      var match = text.match(/\d{7,8}/);
-      var cleaned = text.replace(/[^0-9\-]/g, '');
-      var detectedNumber = match ? match[0] : cleaned.trim();
-
-
-      if (detectedNumber) {
-        document.getElementById('caseId').value = detectedNumber;
-        alert('組合員番号「' + detectedNumber + '」を自動入力しました！');
-      } else {
-        alert('番号がうまく読み取れませんでした。もう一度枠内に合わせて撮影してください。\n(認識テキスト: ' + text + ')');
-      }
-
-
-    } catch (err) {
-      alert('文字認識に失敗しました: ' + err.message);
-    }
-  });
-
-})();
-</script>
-
-
 </html>
