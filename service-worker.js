@@ -3,7 +3,7 @@
    方針: 通信できるときは、必ず最新の版を取りに行く(古い版が残り続けないようにする)。
          通信できないとき、または応答が遅いときだけ、端末に保存した版を使う。 */
 
-const VERSION = '2026.10.30-2';            // index.html の APP_VERSION と同じ値にしておく
+const VERSION = '2026.10.31-1';            // index.html の APP_VERSION と同じ値にしておく
 const CACHE = 'genba-photo-' + VERSION;
 const SCOPE = self.registration.scope;
 const INDEX = new URL('./index.html', SCOPE).href;
