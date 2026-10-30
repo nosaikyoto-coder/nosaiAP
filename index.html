@@ -285,23 +285,23 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
             <span id="caseLabel">組合員番号（証券番号）</span>
             <div class="caserow">
               <div class="casebox casebox-y">
-                <input type="text" id="caseY" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="08" aria-label="証券番号の2桁">
-                <span class="casecap">2桁</span>
+                <input type="text" id="caseY" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="08" aria-label="引受年度(2桁)">
+                <span class="casecap">引受年度<br>(2桁)</span>
               </div>
               <span class="casedash" aria-hidden="true">-</span>
               <div class="casebox casebox-n">
                 <input type="text" id="caseN" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="12345678" aria-label="証券番号の8桁">
-                <span class="casecap">8桁(読取の対象)</span>
+                <span class="casecap">8桁の番号<br>(読取の対象)</span>
               </div>
               <span class="casedash" aria-hidden="true">-</span>
               <div class="casebox casebox-b">
-                <input type="text" id="caseB" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0001" aria-label="証券番号の4桁">
-                <span class="casecap">4桁</span>
+                <input type="text" id="caseB" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0001" aria-label="共済番号(4桁)">
+                <span class="casecap">共済番号<br>(4桁)</span>
               </div>
             </div>
             <div class="casepreview" id="casePreview" aria-live="polite"></div>
             <button type="button" id="scanBtn" class="small-btn" style="justify-self: start;" title="申込書から8桁の番号を撮影・読み取り">📸 8桁の番号を読み取る</button>
-            <p class="small" style="font-weight: 400;">2桁は、令和8年なら 08 と入力します。4桁は、1と入力すると 0001 になります。2桁と4桁は、入力しなくても撮影できます。</p>
+            <p class="small" style="font-weight: 400;">引受年度は、令和8年なら 08 と入力します。共済番号は、1と入力すると 0001 になります。引受年度と共済番号は、入力しなくても撮影できます。</p>
           </div>
 
 
@@ -370,7 +370,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.10.31-1';
+  var APP_VERSION = '2026.10.31-2';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -1098,7 +1098,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     return t.replace(/[^0-9]/g, '').slice(0, max);
   }
 
-  /* 2桁と4桁は、入力があれば、0を足して桁をそろえる(8 → 08、1 → 0001)。8桁は、そのまま。 */
+  /* 引受年度(2桁)と共済番号(4桁)は、入力があれば、0を足して桁をそろえる(8 → 08、1 → 0001)。8桁は、そのまま。 */
   function getCaseParts() {
     var y = digits($('caseY').value, 2), n = digits($('caseN').value, 8), b = digits($('caseB').value, 4);
     return { y: y ? pad(y, 2) : '', n: n, b: b ? pad(b, 4) : '' };
