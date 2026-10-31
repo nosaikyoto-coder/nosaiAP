@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.jpeg" type="image/jpeg">
 <link rel="apple-touch-icon" href="icon.jpeg">
-<title>現場写真記録</title>
+<title>NOSAI京都 損害評価アプリ</title>
 <style>
 /* 組合員番号入力欄の強調表示 */
 .highlight-focus {
@@ -221,9 +221,12 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 <main class="login" id="loginRoot">
   <form class="panel" id="loginForm" autocomplete="off">
     <div>
-      <h1>建物共済 損害評価写真</h1>
-      <p class="sub" id="loginSub">職員IDを選んで、パスワードを入力してください</p>
+      <h1>NOSAI京都 損害評価アプリ</h1>
+      <p class="sub" id="loginSub">支所と職員IDを選んで、パスワードを入力してください</p>
     </div>
+    <label class="field">支所
+      <select id="branchSel"></select>
+    </label>
     <label class="field">職員ID
       <select id="staffSel"></select>
     </label>
@@ -240,7 +243,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 <div class="wrap" id="appRoot" hidden>
   <header class="top">
     <div>
-      <h1>建物共済 現場写真記録</h1>
+      <h1>NOSAI京都 損害評価アプリ</h1>
       <p class="sub">撮影日時とGPS位置を写真に焼き付けて、この端末に保存します</p>
     </div>
     <div class="statusbar" aria-label="現在の状態">
@@ -305,7 +308,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
           </div>
 
 
-          <div class="field">担当者(ログイン中の職員ID)
+          <div class="field">担当者(ログイン中の支所と職員ID)
             <div class="readonly" id="whoShow">-</div>
           </div>
           <label class="field">通し番号
@@ -370,7 +373,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.10.31-2';
+  var APP_VERSION = '2026.10.31-3';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -540,7 +543,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     var addr = (fix && st.addr && dist(st.addr, fix) < 300 && Date.now() - st.addr.at < 180000) ? st.addr : null;
     return {
       label: label, date: date, fix: fix, addr: addr, addrOn: $('addrOn').checked,
-      caseParts: getCaseParts(), caseId: caseKey(), who: st.user || '',
+      caseParts: getCaseParts(), caseId: caseKey(), who: st.user || '', branch: st.branch || '',
       seq: parseInt($('seq').value, 10) || 1
     };
   }
@@ -723,7 +726,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       st.photos.push({
         filename: name, blob: blob, url: URL.createObjectURL(blob), saved: false, sha: sha, method: method,
         date: date, fix: info.fix, addr: info.addrOn ? (info.addr ? info.addr.text : '未取得') : '',
-        caseId: info.caseId, who: info.who, seq: info.seq, w: w, h: h
+        caseId: info.caseId, who: info.who, branch: info.branch, seq: info.seq, w: w, h: h
       });
       $('seq').value = info.seq + 1;
       notice('');
@@ -820,12 +823,12 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 
 
   function saveCsv() {
-    var head = ['連番', 'ファイル名', '組合員番号', '担当者', '方法', '日時(日本時間)', 'GPS時刻(日本時間)', '緯度', '経度', '精度(m)', '所在地(市区町村)', 'SHA-256', '地図URL', 'アプリ版'];
+    var head = ['連番', 'ファイル名', '組合員番号', '担当者', '支所', '方法', '日時(日本時間)', 'GPS時刻(日本時間)', '緯度', '経度', '精度(m)', '所在地(市区町村)', 'SHA-256', '地図URL', 'アプリ版'];
     var rows = [head.join(',')];
     st.photos.forEach(function (p) {
       var f = p.fix;
       rows.push([
-        csvNum(p.seq), csvText(p.filename), csvText(p.caseId), csvText(p.who),
+        csvNum(p.seq), csvText(p.filename), csvText(p.caseId), csvText(p.who), csvText(p.branch),
         p.method === 'camera' ? 'カメラ撮影' : '写真取込(焼付時の日時)',
         fmtJst(p.date), f ? fmtJst(new Date(f.ts)) : '',
         f ? f.lat.toFixed(6) : '位置情報なし', f ? f.lon.toFixed(6) : '', f ? String(Math.round(f.acc)) : '',
@@ -883,15 +886,22 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 
 
   /* ---------- 入力欄の記憶(この端末のブラウザ内のみ) ---------- */
-  function loadForm() {
+  function storeGet() {
+    try { return JSON.parse(localStorage.getItem('genbaPhoto') || '{}') || {}; } catch (e) { return {}; }
+  }
+  /* 覚えるのは、「市区町村名の設定」と「最後に選んだ支所」だけ。それ以外(古い版の番号など)は残さない */
+  function storeSet(patch) {
     try {
-      var s = JSON.parse(localStorage.getItem('genbaPhoto') || '{}');
-      if (s.addrOn) $('addrOn').checked = true;
-    } catch (e) { /* 記憶なしで続行 */ }
+      var o = storeGet();
+      var next = { addrOn: o.addrOn, branch: o.branch };
+      Object.keys(patch).forEach(function (k) { next[k] = patch[k]; });
+      localStorage.setItem('genbaPhoto', JSON.stringify(next));
+    } catch (e) { /* 無視 */ }
   }
-  function saveForm() {
-    try { localStorage.setItem('genbaPhoto', JSON.stringify({ addrOn: $('addrOn').checked })); } catch (e) { /* 無視 */ }
+  function loadForm() {
+    if (storeGet().addrOn) $('addrOn').checked = true;
   }
+  function saveForm() { storeSet({ addrOn: $('addrOn').checked }); }
 
 
   /* ---------- 配線 ---------- */
@@ -924,8 +934,11 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
      パスワードそのものはこのファイルに入れず、ソルト付きのPBKDF2ハッシュだけを持つ。
      ただし、この確認は端末の中だけで行うため、ファイルを書き換えられる人には突破できる。
      職員の識別と、うっかり使用の防止が目的。職員を追加するときは staff-entry-tool.html で行を作る。 */
+  /* 支所の一覧。ログイン画面には、この順番で出る。名前を直すときは、ここだけを直す。
+     職員の一覧(STAFF)の branch には、ここと同じ名前を書く。 */
+  var BRANCHES = ['本所', '山城支所', '京都支所', '中丹支所', '丹後支所'];
   var STAFF = [
-    { id: 's-minamitani', iter: 210000, salt: 'b8e0dd68c95d2c5b251763b0ef06f04b', hash: '928799312eb37e178f831ccf1a0a7305e96691cd72414384a538847fcd6f052e' }
+    { branch: '本所', id: 's-minamitani', iter: 210000, salt: 'b8e0dd68c95d2c5b251763b0ef06f04b', hash: '928799312eb37e178f831ccf1a0a7305e96691cd72414384a538847fcd6f052e' }
   ];
   var IDLE_MS = 30 * 60 * 1000;
   var FAIL_LIMIT = 5;
@@ -956,16 +969,36 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   }
 
 
-  function showLogin(sub, lockedId) {
-    $('appRoot').hidden = true;
-    $('loginRoot').hidden = false;
-    $('loginSub').textContent = sub || '職員IDを選んで、パスワードを入力してください';
+  /* 選んだ支所の職員IDだけを、一覧に出す */
+  function fillStaff(branch, lockedId) {
     var sel = $('staffSel');
     sel.textContent = '';
-    STAFF.forEach(function (s) {
-      if (lockedId && s.id !== lockedId) return;
+    var list = STAFF.filter(function (s) { return s.branch === branch && (!lockedId || s.id === lockedId); });
+    if (!list.length) {
+      var e = document.createElement('option');
+      e.value = '';
+      e.textContent = '(この支所の職員は、まだ登録されていません)';
+      sel.appendChild(e);
+      return;
+    }
+    list.forEach(function (s) {
       var o = document.createElement('option'); o.value = s.id; o.textContent = s.id; sel.appendChild(o);
     });
+  }
+
+  function showLogin(sub, lockedId, lockedBranch) {
+    $('appRoot').hidden = true;
+    $('loginRoot').hidden = false;
+    $('loginSub').textContent = sub || '支所と職員IDを選んで、パスワードを入力してください';
+    var bsel = $('branchSel');
+    bsel.textContent = '';
+    BRANCHES.forEach(function (b) {
+      if (lockedBranch && b !== lockedBranch) return;
+      var o = document.createElement('option'); o.value = b; o.textContent = b; bsel.appendChild(o);
+    });
+    var want = lockedBranch || storeGet().branch;
+    if (want && BRANCHES.indexOf(want) >= 0) bsel.value = want;
+    fillStaff(bsel.value, lockedId);
     $('pw').value = '';
     loginMsg('');
     setTimeout(function () { try { $('pw').focus(); } catch (e) { /* 無視 */ } }, 50);
@@ -975,7 +1008,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   function showApp(resumed) {
     $('loginRoot').hidden = true;
     $('appRoot').hidden = false;
-    $('whoShow').textContent = st.user;
+    $('whoShow').textContent = st.branch + '\u3000' + st.user;
     st.lastAct = Date.now();
     if (resumed) {
       /* 画面ロックからの再開では、入力中の案件をそのまま残す */
@@ -1002,8 +1035,9 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       loginMsg('このブラウザではログイン処理を行えません。ファイルをブラウザで直接開いているか確認してください。');
       return;
     }
+    var branch = $('branchSel').value;
     var id = $('staffSel').value;
-    var rec = STAFF.filter(function (s) { return s.id === id; })[0];
+    var rec = STAFF.filter(function (s) { return s.id === id && s.branch === branch; })[0];
     var pw = $('pw').value;
     $('loginBtn').disabled = true;
     try {
@@ -1011,6 +1045,8 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       if (rec && pw && sameStr(h, rec.hash)) {
         st.fails = 0; st.lockUntil = 0;
         st.user = id;
+        st.branch = branch;
+        storeSet({ branch: branch });
         $('pw').value = '';
         if (st.lockedUser && st.lockedUser !== id) { return; }
         var resumed = !!st.lockedUser;
@@ -1022,7 +1058,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
           st.lockUntil = Date.now() + 30000 * (st.fails - FAIL_LIMIT + 1);
           loginMsg('パスワードを続けて間違えました。しばらく待ってからお試しください。');
         } else {
-          loginMsg('職員IDまたはパスワードが違います。');
+          loginMsg('支所、職員ID、パスワードのどれかが違います。');
         }
         $('pw').value = '';
       }
@@ -1041,7 +1077,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     stopCamera();
     st.photos.forEach(function (p) { URL.revokeObjectURL(p.url); });
     st.photos = [];
-    st.user = null; st.lockedUser = null; st.logoutArm = false;
+    st.user = null; st.branch = null; st.lockedUser = null; st.logoutArm = false;
     clearCase();
     $('logoutBtn').textContent = 'ログアウト';
     notice('');
@@ -1072,7 +1108,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       /* 未保存の写真が残っているときは、同じ職員のパスワードで再開できるようロックだけ行う */
       stopCamera();
       st.lockedUser = st.user;
-      showLogin('しばらく操作がなかったため、画面をロックしました。未保存の写真があるため、同じ職員IDのパスワードで再開してください。', st.user);
+      showLogin('しばらく操作がなかったため、画面をロックしました。未保存の写真があるため、同じ職員IDのパスワードで再開してください。', st.user, st.branch);
     } else {
       doLogout();
     }
@@ -1082,6 +1118,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   ['pointerdown', 'keydown', 'touchstart'].forEach(function (t) {
     document.addEventListener(t, function () { st.lastAct = Date.now(); }, { passive: true });
   });
+  $('branchSel').addEventListener('change', function () { fillStaff($('branchSel').value, null); });
   $('loginForm').addEventListener('submit', onLogin);
   $('logoutBtn').addEventListener('click', onLogoutClick);
 
