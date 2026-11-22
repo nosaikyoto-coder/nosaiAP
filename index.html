@@ -166,18 +166,21 @@ body.fsOpen { overflow: hidden; }
 .fsgps { flex: 0 0 auto; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.45); font-size: 0.8rem; white-space: nowrap; }
 .fsgps.warn { color: #ffc247; border-color: #ffc247; }
 .fsgps.bad { color: #ff8a80; border-color: #ff8a80; }
-.fsbottom { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 8px max(10px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.7)); }
+.fsbottom { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; padding: 8px max(10px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.7)); }
+.fsleft { display: grid; gap: 6px; min-width: 0; }
+.fsright { display: grid; justify-items: center; gap: 10px; }
+.fsend { min-width: 132px; min-height: 52px !important; background: #1d6a49 !important; border-color: #5ec99b !important; font-weight: 700; }
 .fsthumbs { display: flex; gap: 6px; overflow-x: auto; pointer-events: auto; min-height: 64px; align-items: center; -webkit-overflow-scrolling: touch; }
 .fsthumbs .none { font-size: 0.8rem; opacity: 0.9; text-shadow: 0 0 3px #000; }
 .fsthumbs button.th { flex: 0 0 auto; width: 64px; height: 64px; min-height: 0; padding: 0; border-radius: 8px; overflow: hidden; border: 2px solid rgba(255, 255, 255, 0.5); position: relative; }
 .fsthumbs button.th.cur { border-color: #5ec99b; border-width: 3px; }
 .fsthumbs button.th img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .fsthumbs button.th span { position: absolute; right: 2px; bottom: 2px; font-size: 0.65rem; background: rgba(0, 0, 0, 0.7); padding: 0 4px; border-radius: 4px; }
-.fsshutter { width: 84px; height: 84px; min-height: 0 !important; border-radius: 50% !important; border: 5px solid #fff !important; background: rgba(255, 255, 255, 0.25) !important; font-weight: 700; font-size: 0.85rem; padding: 0 !important; }
+.fsshutter { width: 100px; height: 100px; min-height: 0 !important; border-radius: 50% !important; border: 5px solid #fff !important; background: rgba(255, 255, 255, 0.25) !important; font-weight: 700; font-size: 0.85rem; padding: 0 !important; }
 .fsshutter:disabled { opacity: 0.4; cursor: not-allowed; }
-.fscount { text-align: right; font-size: clamp(12px, 2vw, 16px); line-height: 1.35; text-shadow: 0 0 3px #000, 0 0 2px #000; }
-.fscount b { font-size: 1.9em; font-family: var(--font-data); }
-.stage.full .hud { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); font-size: clamp(11px, 1.8vw, 16px); }
+.fscount { text-align: left; font-size: clamp(12px, 2vw, 16px); line-height: 1.35; text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.fscount b { font-size: 1.5em; font-family: var(--font-data); }
+.stage.full .hud { bottom: calc(196px + env(safe-area-inset-bottom, 0px)); font-size: clamp(11px, 1.8vw, 16px); }
 .stage.full .camalert { top: calc(72px + env(safe-area-inset-top, 0px)); }
 .stage.full .fstoast { display: block; position: absolute; left: 50%; transform: translateX(-50%); top: calc(150px + env(safe-area-inset-top, 0px)); max-width: 90%; z-index: 4; padding: 8px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.78); color: #fff; font-size: clamp(13px, 2.4vw, 18px); text-align: center; pointer-events: none; }
 .stage.full .fstoast[hidden] { display: none; }
@@ -315,15 +318,19 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
         <div class="camalert" id="camAlert" role="alert" hidden></div>
         <div class="fsui" id="fsUi">
           <div class="fstop">
-            <button type="button" id="fsBack">← 戻る</button>
             <div class="fsinfo" id="fsInfo"></div>
             <span class="fsgps" id="fsGps"></span>
             <button type="button" id="fsCase">番号を変更</button>
           </div>
           <div class="fsbottom">
-            <div class="fsthumbs" id="fsThumbs" aria-label="撮影した写真"></div>
-            <button type="button" class="fsshutter" id="fsShutter" disabled aria-label="撮影して焼き付ける">撮影</button>
-            <div class="fscount" id="fsCount"></div>
+            <div class="fsleft">
+              <div class="fscount" id="fsCount"></div>
+              <div class="fsthumbs" id="fsThumbs" aria-label="撮影した写真"></div>
+            </div>
+            <div class="fsright">
+              <button type="button" class="fsshutter" id="fsShutter" disabled aria-label="撮影して焼き付ける">撮影</button>
+              <button type="button" class="fsend" id="fsEnd">終了して保存</button>
+            </div>
           </div>
         </div>
         <div class="fstoast" id="fsToast" role="status" hidden></div>
@@ -455,7 +462,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.11.22-1';
+  var APP_VERSION = '2026.11.23-1';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -787,9 +794,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     c.textContent = '';
     c.appendChild(document.createTextNode('この番号 '));
     var b = document.createElement('b'); b.textContent = String(same); c.appendChild(b);
-    c.appendChild(document.createTextNode('枚'));
-    c.appendChild(document.createElement('br'));
-    c.appendChild(document.createTextNode('全部で ' + st.photos.length + '枚'));
+    c.appendChild(document.createTextNode('枚  /  全部で ' + st.photos.length + '枚'));
     /* 撮影した写真(新しい順)。写真の枚数か番号が変わったときだけ作り直す */
     var sig = key + '|' + st.photos.length;
     if (st.fsSig === sig) return;
@@ -839,6 +844,19 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     $('fsSheet').hidden = true; $('fsViewer').hidden = true; $('fsToast').hidden = true;
     try { if (document.fullscreenElement && document.exitFullscreen) { var pr = document.exitFullscreen(); if (pr && pr.catch) pr.catch(function () { /* 無視 */ }); } } catch (e) { /* 無視 */ }
     try { if (history.state && history.state.fs) history.back(); } catch (e) { /* 無視 */ }
+  }
+
+  /* 「終了して保存」: カメラを止めて、まだ端末に保存していない写真を、すべて保存する */
+  async function endAndSave() {
+    var todo = st.photos.filter(function (p) { return !p.local; });
+    stopCamera();
+    if (!todo.length) { notice(st.photos.length ? '' : '撮影した写真はありません。'); return; }
+    notice(todo.length + '枚の写真を、この端末に保存しています…');
+    await saveLocalAll(todo);
+    setTimeout(function () {
+      var left = todo.filter(function (p) { return !p.local; }).length;
+      notice(left ? left + '枚が、まだ保存されていません。下の一覧の「保存」を押してください。' : '写真' + todo.length + '枚を、この端末に保存しました。');
+    }, todo.length * 500 + 1200);
   }
 
   function openCaseSheet() {
@@ -1303,7 +1321,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   /* ---------- 配線 ---------- */
   $('startBtn').addEventListener('click', startCamera);
   $('stopBtn').addEventListener('click', stopCamera);
-  $('fsBack').addEventListener('click', stopCamera);
+  $('fsEnd').addEventListener('click', endAndSave);
   $('fsShutter').addEventListener('click', onShutter);
   $('fsCase').addEventListener('click', openCaseSheet);
   $('fsCaseDone').addEventListener('click', closeCaseSheet);
