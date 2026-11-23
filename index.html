@@ -200,6 +200,23 @@ body.fsOpen { overflow: hidden; }
 .fsviewer img { width: 100%; height: 100%; object-fit: contain; min-height: 0; }
 .fsviewer .cap { padding: 10px 14px max(12px, env(safe-area-inset-bottom, 0px)); display: flex; gap: 10px; align-items: center; justify-content: space-between; font-size: 0.85rem; font-family: var(--font-data); overflow-wrap: anywhere; }
 .fsviewer button { font: inherit; min-height: 48px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.6); background: rgba(255, 255, 255, 0.15); color: #fff; padding: 0 20px; cursor: pointer; flex: 0 0 auto; }
+/* メールで送信 */
+.mailmodal { position: fixed; inset: 0; z-index: 1100; background: rgba(0, 0, 0, 0.72); display: flex; align-items: center; justify-content: center; padding: 12px; }
+.mailmodal[hidden] { display: none; }
+.mailbox { background: var(--surface); color: var(--fg); border-radius: 10px; width: 100%; max-width: 580px; max-height: 94vh; max-height: 94dvh; overflow: auto; padding: 16px; display: grid; gap: 10px; }
+.mailbox h2 { margin: 0; font-size: 1.1rem; }
+.mailbox .to { font-family: var(--font-data); font-weight: 700; overflow-wrap: anywhere; }
+.mailtools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.maillist { display: grid; gap: 6px; max-height: 38vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+.maillist label { display: grid; grid-template-columns: auto 52px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 0.85rem; padding: 4px; border-radius: 6px; }
+.maillist label input { width: 22px; height: 22px; }
+.maillist img { width: 52px; height: 52px; object-fit: cover; border-radius: 4px; }
+.maillist .nm { overflow-wrap: anywhere; font-family: var(--font-data); }
+.maillist .sz { color: var(--muted); font-size: 0.78rem; }
+.mailbatches { display: grid; gap: 8px; }
+.mailbatches button { min-height: 52px; }
+.mailbatches button.done { background: var(--ok-bg); color: var(--fg); border-color: var(--accent); }
+.mailfoot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
 .hud { position: absolute; left: 0; right: 0; bottom: 0; color: #fff; text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9); font-family: var(--font-data); font-size: clamp(10px, 1.7vw, 14px); line-height: 1.45; padding: 6px 10px; pointer-events: none; }
 .hud div { overflow-wrap: anywhere; }
 .hud .nogps { color: #ffc247; }
@@ -411,6 +428,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
         <div class="list" id="list"></div>
         <div class="controls">
           <button class="primary" id="saveAll" type="button" disabled>未保存をすべて保存</button>
+          <button id="mailBtn" type="button" disabled>メールで送信</button>
           <button id="uploadBtn" type="button" disabled>ドライブにアップロード</button>
           <button id="csvBtn" type="button" disabled>撮影記録CSVを保存</button>
         </div>
@@ -427,13 +445,34 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       <li>日時は端末の時計を日本時間で表示しています。端末の日時が正しいか、撮影前に確認してください。</li>
       <li>写真は「保存」を押したときにダウンロード先へ保存されます。<strong>端末にもドライブにも保存していない写真は、ページを閉じると失われます。</strong></li>
       <li>撮影記録CSVには、各写真の日時・緯度経度・精度・SHA-256(改ざん確認用の値)が入ります。CSVは写真とは別の場所にも保管してください。</li>
-      <li>写真は、「ドライブにアップロード」を押したときだけ、この端末でログインしているGoogleアカウントのドライブに送ります。それ以外では外部へ送信しません。「保存」は端末への保存です(スマホ等では、こちらを使います)。「市区町村名を焼き付ける」をオンにした場合だけ、現在地の緯度経度(小数点以下4桁)を国土地理院のサービスに送ります。</li>
+      <li>写真は、「ドライブにアップロード」または「メールで送信」を押したときだけ、外部に送ります。ドライブは、この端末でログインしているGoogleアカウントです。メールは、選んだメールアプリから、支所ごとに決めた宛先に送ります。それ以外では外部へ送信しません。「保存」は端末への保存です(スマホ等では、こちらを使います)。「市区町村名を焼き付ける」をオンにした場合だけ、現在地の緯度経度(小数点以下4桁)を国土地理院のサービスに送ります。</li>
       <li>組合員番号は、申込書と見比べて、必ず確認してください。番号の読取は、8桁の数字だけを対象にした補助の機能で、通信が必要です。通信がないときは、手で入力してください。</li>
       <li>アプリの版: <span id="verApp"></span></li>
     </ul>
   </section>
 </div>
 
+
+<div class="mailmodal" id="mailModal" role="dialog" aria-modal="true" aria-label="メールで送信" hidden>
+  <div class="mailbox">
+    <h2>メールで送信</h2>
+    <p class="small" style="margin: 0;">送り先: <span class="to" id="mailTo"></span> <button type="button" id="mailCopy" class="small-btn">宛先をコピー</button></p>
+    <p class="small" style="margin: 0;">送る写真を選び、下の送信ボタンを押すと、メールアプリの候補が出ます。選んだアプリを開くと、写真が添付されます。宛先は、アプリから自動では入れられないため、押したときに宛先をコピーしています。メールアプリの宛先欄に貼り付けてください。</p>
+    <div class="mailtools">
+      <button type="button" id="mailAll" class="small-btn">すべて選ぶ</button>
+      <button type="button" id="mailNone" class="small-btn">すべて外す</button>
+      <label style="display: flex; gap: 6px; align-items: center; font-weight: 400;"><input type="checkbox" id="mailCsv" checked> 撮影記録CSVも添付</label>
+    </div>
+    <div class="maillist" id="mailList"></div>
+    <p class="small" id="mailSum" style="margin: 0;"></p>
+    <div class="mailbatches" id="mailBatches"></div>
+    <p class="small" id="mailMsg" role="status" aria-live="polite" style="margin: 0;"></p>
+    <div class="mailfoot">
+      <button type="button" id="mailDraft" class="small-btn">宛先入りの下書きを開く(写真は添付されません)</button>
+      <button type="button" id="mailClose">閉じる</button>
+    </div>
+  </div>
+</div>
 
 <div id="scanModal" role="dialog" aria-modal="true" aria-label="組合員番号の読み取り" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 16px;">
   <div style="position: relative; width: 100%; max-width: 500px; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
@@ -462,7 +501,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.11.23-1';
+  var APP_VERSION = '2026.11.23-2';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -1043,6 +1082,13 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     accounts: {},
     scope: 'https://www.googleapis.com/auth/drive.file'
   };
+  /* メールで送るときの宛先(支所ごと)。ここに書いていない支所では、メールで送信は使えない。
+     試験のため、いまは本所だけ設定している。本番の宛先は、企画情報課が決めて、ここに書く。 */
+  var MAIL = {
+    to: { '本所': 'vovolove0527@gmail.com' },
+    batchBytes: 18 * 1024 * 1024,
+    batchCount: 30
+  };
   var DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
   var DRIVE_UP = 'https://www.googleapis.com/upload/drive/v3/files';
   var driveTok = { token: '', exp: 0, client: null };
@@ -1218,6 +1264,126 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     return 'アップロードに失敗しました。もう一度お試しください。';
   }
 
+
+  /* ---------- メールで送信 ----------
+     ブラウザの「共有」機能で、メールアプリの候補を出し、選んだ写真を添付する。
+     共有の機能では、宛先を決めて渡すことができない。このため、宛先は自動でコピーして、貼り付けてもらう。 */
+  var mailState = { selected: {}, sent: {} };
+
+  function mailTo() { return (MAIL.to && MAIL.to[st.branch]) || ''; }
+  function mbText(n) { return (n / 1048576).toFixed(1) + 'MB'; }
+
+  function mailMsg(t, bad) {
+    var m = $('mailMsg');
+    m.textContent = t || '';
+    m.style.color = bad ? 'var(--warn)' : '';
+  }
+
+  /* 選んだ写真を、1通あたりの大きさと枚数の上限に収まるように、何通かに分ける */
+  function mailBatches() {
+    var chosen = st.photos.filter(function (p) { return mailState.selected[p.filename]; });
+    var batches = [], cur = null;
+    chosen.forEach(function (p) {
+      if (!cur || cur.bytes + p.blob.size > MAIL.batchBytes || cur.photos.length >= MAIL.batchCount) {
+        cur = { photos: [], bytes: 0, csv: false };
+        batches.push(cur);
+      }
+      cur.photos.push(p); cur.bytes += p.blob.size;
+    });
+    if (batches.length && $('mailCsv').checked) batches[0].csv = true;
+    return batches;
+  }
+
+  function mailSubject(batch, i, n) {
+    var d = jst(new Date());
+    return '【損害評価】' + (st.branch || '') + ' ' + (st.user || '') + ' ' + d.y + '-' + d.m + '-' + d.d + ' 写真' + batch.photos.length + '枚' + (n > 1 ? '(' + (i + 1) + '/' + n + ')' : '');
+  }
+  function mailBody(batch) {
+    var keys = {};
+    batch.photos.forEach(function (p) { keys[p.caseId || '未入力'] = (keys[p.caseId || '未入力'] || 0) + 1; });
+    var lines = ['NOSAI京都 損害評価アプリで撮影した写真です。', '', '支所: ' + (st.branch || ''), '担当者: ' + (st.user || ''), '写真: ' + batch.photos.length + '枚', ''];
+    Object.keys(keys).forEach(function (k) { lines.push('組合員番号 ' + k + ' : ' + keys[k] + '枚'); });
+    lines.push('', 'アプリの版: ' + APP_VERSION);
+    return lines.join('\n');
+  }
+
+  function renderMail() {
+    var list = $('mailList');
+    list.textContent = '';
+    st.photos.forEach(function (p) {
+      var lb = document.createElement('label');
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!mailState.selected[p.filename];
+      cb.addEventListener('change', function () { mailState.selected[p.filename] = cb.checked; renderMail(); });
+      var im = document.createElement('img'); im.src = p.url; im.alt = '';
+      var tx = document.createElement('span'); tx.className = 'nm';
+      tx.textContent = 'No.' + pad(p.seq) + '  ' + p.filename;
+      var sz = document.createElement('span'); sz.className = 'sz';
+      sz.textContent = '  ' + mbText(p.blob.size) + (p.mailed ? '  メール共有済み' : '');
+      tx.appendChild(sz);
+      lb.appendChild(cb); lb.appendChild(im); lb.appendChild(tx);
+      list.appendChild(lb);
+    });
+    var batches = mailBatches();
+    var total = batches.reduce(function (a, b) { return a + b.bytes; }, 0);
+    var nSel = batches.reduce(function (a, b) { return a + b.photos.length; }, 0);
+    $('mailSum').textContent = nSel ? '選んだ写真: ' + nSel + '枚 / ' + mbText(total) + (batches.length > 1 ? '(メールの大きさの上限のため、' + batches.length + '通に分けます)' : '') : '写真を選んでください。';
+    var box = $('mailBatches');
+    box.textContent = '';
+    var canShare = !!(navigator.share && navigator.canShare);
+    batches.forEach(function (b, i) {
+      var bt = document.createElement('button'); bt.type = 'button'; bt.className = 'primary';
+      var done = b.photos.every(function (p) { return mailState.sent[p.filename]; });
+      if (done) bt.classList.add('done');
+      bt.textContent = (batches.length > 1 ? (i + 1) + '通目: ' : '') + 'メールアプリを選んで送る(写真' + b.photos.length + '枚' + (b.csv ? '+CSV' : '') + ' / ' + mbText(b.bytes) + ')' + (done ? ' 済み' : '');
+      bt.disabled = !canShare;
+      bt.addEventListener('click', function () { shareBatch(batches, i); });
+      box.appendChild(bt);
+    });
+    if (!canShare) mailMsg('この端末のブラウザでは、メールアプリの候補を出す機能が使えません。写真を「保存」して、メールに添付するか、下の「下書きを開く」を使ってください。', true);
+  }
+
+  function openMail() {
+    if (!st.photos.length) return;
+    var to = mailTo();
+    $('mailTo').textContent = to || '(この支所の宛先は、まだ設定されていません)';
+    $('mailCopy').disabled = !to;
+    $('mailDraft').disabled = !to;
+    mailState.selected = {};
+    st.photos.forEach(function (p) { mailState.selected[p.filename] = !p.mailed; });
+    mailMsg(to ? '' : 'この支所では、メールで送信は使えません(宛先は、管理者が設定します)。', !to);
+    $('mailModal').hidden = false;
+    if (to) renderMail(); else { $('mailList').textContent = ''; $('mailSum').textContent = ''; $('mailBatches').textContent = ''; }
+  }
+  function closeMail() { var m = $('mailModal'); if (m) m.hidden = true; }
+
+  async function shareBatch(batches, i) {
+    var b = batches[i], to = mailTo();
+    if (!to) return;
+    var files = b.photos.map(function (p) { return new File([p.blob], p.filename, { type: 'image/jpeg' }); });
+    if (b.csv) files.push(new File([buildCsvBlob()], 'photo-log_' + stampJst(new Date()) + '_' + safeName(st.user) + '.csv', { type: 'text/csv' }));
+    /* 宛先は、共有の画面が開く前にコピーする(貼り付けて使う) */
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(to).catch(function () { /* 無視 */ }); } catch (e) { /* 無視 */ }
+    try {
+      if (!navigator.canShare({ files: files })) { mailMsg('この端末では、この数や大きさの添付を共有できません。枚数を減らして、もう一度お試しください。', true); return; }
+      await navigator.share({ files: files, title: mailSubject(b, i, batches.length), text: mailBody(b) });
+      b.photos.forEach(function (p) { p.mailed = true; mailState.sent[p.filename] = true; });
+      mailMsg('メールアプリに渡しました。宛先欄に貼り付けて(' + to + ')、送信してください。送信まで済んだかどうかは、このアプリでは確認できません。');
+      render(); renderMail();
+    } catch (e) {
+      if (e && e.name === 'AbortError') mailMsg('共有をやめました。');
+      else mailMsg('メールアプリを開けませんでした。もう一度お試しください。', true);
+    }
+  }
+
+  function openMailDraft() {
+    var to = mailTo();
+    if (!to) return;
+    var batches = mailBatches();
+    var b = batches[0] || { photos: [] };
+    var url = 'mailto:' + encodeURIComponent(to).replace(/%40/g, '@') + '?subject=' + encodeURIComponent(mailSubject(b, 0, 1)) + '&body=' + encodeURIComponent(mailBody(b) + '\n\n(写真は添付されていません。アプリで保存した写真を添付してください)');
+    window.location.href = url;
+  }
+
   function csvText(v) {
     var s = String(v == null ? '' : v);
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
@@ -1272,7 +1438,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       var inf = document.createElement('div'); inf.className = 'info';
       inf.textContent = fmtJst(p.date) + (p.fix ? '  ' + p.fix.lat.toFixed(5) + ', ' + p.fix.lon.toFixed(5) + ' ±' + Math.round(p.fix.acc) + 'm' : '  位置情報なし');
       var acts = document.createElement('div'); acts.className = 'acts';
-      var tag = document.createElement('span'); tag.className = 'tag' + (p.saved ? ' saved' : ''); tag.textContent = p.saved ? [p.local ? '端末に保存済み' : '', p.cloud ? 'ドライブ済み' : ''].filter(Boolean).join('・') : '未保存';
+      var tag = document.createElement('span'); tag.className = 'tag' + (p.saved ? ' saved' : ''); tag.textContent = (function () { var parts = [p.local ? '端末に保存済み' : '', p.cloud ? 'ドライブ済み' : '', p.mailed ? 'メール共有済み' : ''].filter(Boolean); if (!parts.length) return '未保存'; return parts.join('・') + (p.saved ? '' : '(端末には未保存)'); })();
       var sb = document.createElement('button'); sb.type = 'button'; sb.textContent = p.local ? 'もう一度保存' : '保存';
       sb.addEventListener('click', function () { savePhoto(p); });
       acts.appendChild(tag); acts.appendChild(sb);
@@ -1293,6 +1459,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     $('count').textContent = st.photos.length ? '(' + st.photos.length + '枚 / 端末に未保存 ' + noLocal + '枚' + (driveConfigured() ? ' / ドライブに未送信 ' + noCloud + '枚' : '') + ')' : '';
     $('saveAll').disabled = noLocal === 0;
     $('uploadBtn').disabled = !driveConfigured() || noCloud === 0;
+    $('mailBtn').disabled = st.photos.length === 0;
     updateFs();
     $('csvBtn').disabled = st.photos.length === 0;
   }
@@ -1348,6 +1515,16 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   $('saveAll').addEventListener('click', saveAll);
   $('csvBtn').addEventListener('click', saveCsv);
   $('uploadBtn').addEventListener('click', uploadAll);
+  $('mailBtn').addEventListener('click', openMail);
+  $('mailClose').addEventListener('click', closeMail);
+  $('mailAll').addEventListener('click', function () { st.photos.forEach(function (p) { mailState.selected[p.filename] = true; }); renderMail(); });
+  $('mailNone').addEventListener('click', function () { mailState.selected = {}; renderMail(); });
+  $('mailCsv').addEventListener('change', renderMail);
+  $('mailDraft').addEventListener('click', openMailDraft);
+  $('mailCopy').addEventListener('click', function () {
+    var to = mailTo();
+    try { navigator.clipboard.writeText(to).then(function () { mailMsg('宛先をコピーしました。'); }, function () { mailMsg('コピーできませんでした。宛先を手で入力してください: ' + to, true); }); } catch (e) { mailMsg('コピーできませんでした。宛先を手で入力してください: ' + to, true); }
+  });
   $('allowNoGps').addEventListener('change', renderStatus);
   $('addrOn').addEventListener('change', function () { saveForm(); st.addrErr = false; renderStatus(); lookupAddr(); });
   ['caseY', 'caseN', 'caseB'].forEach(function (id) {
@@ -1428,6 +1605,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   }
 
   function showLogin(sub, lockedId, lockedBranch) {
+    closeMail();
     $('appRoot').hidden = true;
     $('loginRoot').hidden = false;
     $('loginSub').textContent = sub || '支所と職員IDを選んで、パスワードを入力してください';
@@ -1516,6 +1694,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 
   function doLogout() {
     stopCamera();
+    closeMail();
     st.photos.forEach(function (p) { URL.revokeObjectURL(p.url); });
     st.photos = [];
     st.user = null; st.branch = null; st.lockedUser = null; st.logoutArm = false;
