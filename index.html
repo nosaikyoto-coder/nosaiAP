@@ -501,7 +501,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.11.23-2';
+  var APP_VERSION = '2026.11.24-1';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -1553,10 +1553,15 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
      職員の識別と、うっかり使用の防止が目的。職員を追加するときは staff-entry-tool.html で行を作る。 */
   /* 支所の一覧。ログイン画面には、この順番で出る。名前を直すときは、ここだけを直す。
      職員の一覧(STAFF)の branch には、ここと同じ名前を書く。 */
-  var BRANCHES = ['本所', '山城支所', '京都支所', '中丹支所', '丹後支所'];
+  var BRANCHES = ['山城支所', '京都支所', '中丹支所', '丹後支所', '本所'];
   var STAFF = [
     { branch: '本所', id: 's-minamitani', iter: 210000, salt: 'b8e0dd68c95d2c5b251763b0ef06f04b', hash: '928799312eb37e178f831ccf1a0a7305e96691cd72414384a538847fcd6f052e' },
-    { branch: '本所', id: 'test-honsyo', iter: 210000, salt: 'c2e05c4d2ca0149ba2f1d923e7171231', hash: '494d505a20d1519ccf8cc3c0a0d8ea20549973bd1509e01c3e6e1cac63ca5f87' },
+    /* 試験用のID(パスワードはすべて test)。本番の前に、必ず削除すること */
+    { branch: '山城支所', id: 'yamashiro-test', iter: 210000, salt: '65f1549bd585da83925a5af8c313690a', hash: '03f46fba27bf9149fa2b40f5e1d3edc777773abeec7bf671a70c86db51671a40' },
+    { branch: '京都支所', id: 'kyoto-test', iter: 210000, salt: '82778d0de7aac8ebbac015386590ae84', hash: '4d1fdc59e35a6720841541c9b7b4ca21dd1a0af8e87c5912ecc97207a41dc627' },
+    { branch: '中丹支所', id: 'chutan-test', iter: 210000, salt: '8534b64eddb688b84e215c7c03d01d2d', hash: '339bda49b47ff9e9b16e65ac81a99fe57f58a0750818134fddca6d65156411d1' },
+    { branch: '丹後支所', id: 'tango-test', iter: 210000, salt: 'cfe0fa5a1be266e13430e75abb2952ce', hash: '18cd0306d814551b26301cd7b13b1ad7e7189b2913f9d40a8a0391470d7e9667' },
+    { branch: '本所', id: 'honsyo-test', iter: 210000, salt: '5d335eb7e94866a825c08b417d144678', hash: 'c22558daa9cc83088f9864e4c978a5d2c34bae0a981b39fe7c16827eb1129853' },
   ];
   var IDLE_MS = 30 * 60 * 1000;
   var FAIL_LIMIT = 5;
