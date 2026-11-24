@@ -501,7 +501,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.11.24-5';
+  var APP_VERSION = '2026.11.24-6';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -1425,7 +1425,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       if (!groups[key]) { groups[key] = { n: cp.n, b: bNum, photos: [], noNum: !cp.n }; order.push(key); }
       groups[key].photos.push(p);
     });
-    var head = ['棟の名前', '組合員番号', '共済番号', '写真枚数', '撮影日', '最初の撮影日時(日本時間)', '最後の撮影日時(日本時間)', '担当者', '支所', '緯度', '経度', '精度(m)', '写真間の最大距離(m)', '要確認', 'SHA-256(写真ごと)', '写真ファイル名', '地図URL', 'アプリ版'];
+    var head = ['棟の名前', '組合員番号', '共済番号', '写真枚数', '撮影日', '最初の撮影日時(日本時間)', '最後の撮影日時(日本時間)', '担当者', '支所', '経度', '緯度', '精度(m)', '写真間の最大距離(m)', '要確認', 'SHA-256(写真ごと)', '写真ファイル名', '地図URL', 'アプリ版'];
     var rows = [head.join(',')], skipped = 0, count = 0;
     order.forEach(function (key) {
       var g = groups[key];
@@ -1452,7 +1452,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       rows.push([
         csvText(name), csvText(g.n), csvText(g.b), String(g.photos.length), jstDay(first),
         fmtJst(first), fmtJst(last), csvText(who.join('/')), csvText(brs.join('/')),
-        c.lat.toFixed(6), c.lon.toFixed(6), String(Math.round(best)), String(Math.round(spread)),
+        c.lon.toFixed(6), c.lat.toFixed(6), String(Math.round(best)), String(Math.round(spread)),
         csvText(warn.join(' / ')),
         csvText(g.photos.map(function (p) { return p.sha || ''; }).join(' / ')),
         csvText(g.photos.map(function (p) { return p.filename || ''; }).join(' / ')),
