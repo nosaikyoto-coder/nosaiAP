@@ -431,6 +431,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
           <button id="mailBtn" type="button" disabled>メールで送信</button>
           <button id="uploadBtn" type="button" disabled>ドライブにアップロード</button>
           <button id="csvBtn" type="button" disabled>撮影記録CSVを保存</button>
+          <button id="mapCsvBtn" type="button" disabled>マイマップ用CSVを保存</button>
         </div>
         <p class="small" id="driveMsg" role="status" aria-live="polite" hidden></p>
       </section>
@@ -444,7 +445,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       <li>ブラウザが求める<strong>カメラと位置情報の許可</strong>を「許可」にしてください。</li>
       <li>日時は端末の時計を日本時間で表示しています。端末の日時が正しいか、撮影前に確認してください。</li>
       <li>写真は「保存」を押したときにダウンロード先へ保存されます。<strong>端末にもドライブにも保存していない写真は、ページを閉じると失われます。</strong></li>
-      <li>撮影記録CSVには、各写真の日時・緯度経度・精度・SHA-256(改ざん確認用の値)が入ります。CSVは写真とは別の場所にも保管してください。</li>
+      <li>撮影記録CSVには、各写真の日時・緯度経度・精度・SHA-256(改ざん確認用の値)が入ります。CSVは写真とは別の場所にも保管してください。「マイマップ用CSV」は、組合員番号と共済番号(棟番号)ごとに1行にまとめたもので、Googleマイマップに取り込むと、評価した棟ごとにピンが立ちます。</li>
       <li>写真は、「ドライブにアップロード」または「メールで送信」を押したときだけ、外部に送ります。ドライブは、この端末でログインしているGoogleアカウントです。メールは、選んだメールアプリから、支所ごとに決めた宛先に送ります。それ以外では外部へ送信しません。「保存」は端末への保存です(スマホ等では、こちらを使います)。「市区町村名を焼き付ける」をオンにした場合だけ、現在地の緯度経度(小数点以下4桁)を国土地理院のサービスに送ります。</li>
       <li>組合員番号は、申込書と見比べて、必ず確認してください。番号の読取は、8桁の数字だけを対象にした補助の機能で、通信が必要です。通信がないときは、手で入力してください。</li>
       <li>アプリの版: <span id="verApp"></span></li>
@@ -462,6 +463,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       <button type="button" id="mailAll" class="small-btn">すべて選ぶ</button>
       <button type="button" id="mailNone" class="small-btn">すべて外す</button>
       <label style="display: flex; gap: 6px; align-items: center; font-weight: 400;"><input type="checkbox" id="mailCsv" checked> 撮影記録CSVも添付</label>
+      <label style="display: flex; gap: 6px; align-items: center; font-weight: 400;"><input type="checkbox" id="mailMap" checked> マイマップ用CSVも添付</label>
     </div>
     <div class="maillist" id="mailList"></div>
     <p class="small" id="mailSum" style="margin: 0;"></p>
@@ -501,7 +503,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.11.24-1';
+  var APP_VERSION = '2026.11.24-2';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -1247,6 +1249,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       var now = new Date();
       var fb = await driveFolder(root, jstDay(now));
       await driveUpload(fb, 'photo-log_' + stampJst(now) + '_' + safeName(st.user) + '.csv', buildCsvBlob());
+      await driveUpload(fb, 'mymap_' + stampJst(now) + '_' + safeName(st.user) + '.csv', buildMapCsv().blob);
     } catch (e) { ng++; lastErr = e; }
     render();
     var where = email ? '(保存先: ' + email + ')' : '';
@@ -1290,7 +1293,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       }
       cur.photos.push(p); cur.bytes += p.blob.size;
     });
-    if (batches.length && $('mailCsv').checked) batches[0].csv = true;
+    if (batches.length) { batches[0].csv = $('mailCsv').checked; batches[0].mymap = $('mailMap').checked; }
     return batches;
   }
 
@@ -1334,7 +1337,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       var bt = document.createElement('button'); bt.type = 'button'; bt.className = 'primary';
       var done = b.photos.every(function (p) { return mailState.sent[p.filename]; });
       if (done) bt.classList.add('done');
-      bt.textContent = (batches.length > 1 ? (i + 1) + '通目: ' : '') + 'メールアプリを選んで送る(写真' + b.photos.length + '枚' + (b.csv ? '+CSV' : '') + ' / ' + mbText(b.bytes) + ')' + (done ? ' 済み' : '');
+      bt.textContent = (batches.length > 1 ? (i + 1) + '通目: ' : '') + 'メールアプリを選んで送る(写真' + b.photos.length + '枚' + (b.csv ? '+CSV' : '') + (b.mymap ? '+マイマップ用CSV' : '') + ' / ' + mbText(b.bytes) + ')' + (done ? ' 済み' : '');
       bt.disabled = !canShare;
       bt.addEventListener('click', function () { shareBatch(batches, i); });
       box.appendChild(bt);
@@ -1360,6 +1363,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     var b = batches[i], to = mailTo();
     if (!to) return;
     var files = b.photos.map(function (p) { return new File([p.blob], p.filename, { type: 'image/jpeg' }); });
+    if (b.mymap) files.push(new File([buildMapCsv().blob], 'mymap_' + stampJst(new Date()) + '_' + safeName(st.user) + '.csv', { type: 'text/csv' }));
     if (b.csv) files.push(new File([buildCsvBlob()], 'photo-log_' + stampJst(new Date()) + '_' + safeName(st.user) + '.csv', { type: 'text/csv' }));
     /* 宛先は、共有の画面が開く前にコピーする(貼り付けて使う) */
     try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(to).catch(function () { /* 無視 */ }); } catch (e) { /* 無視 */ }
@@ -1413,6 +1417,70 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     });
     return new Blob(['﻿' + rows.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
   }
+
+  /* ---------- マイマップ用CSV ----------
+     組合員番号(8桁)と共済番号(棟番号)の組み合わせごとに、1行にまとめる。
+     位置は、その棟の写真の位置を、精度のよいものほど重くして平均した点。 */
+  function distM(a, b) {
+    var R = 6371000, rad = Math.PI / 180;
+    var dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+    var x = dLon * Math.cos((a.lat + b.lat) / 2 * rad), y = dLat;
+    return R * Math.sqrt(x * x + y * y);
+  }
+
+  function buildMapCsv() {
+    var groups = {}, order = [];
+    st.photos.forEach(function (p) {
+      var cp = p.caseParts || { y: '', n: '', b: '' };
+      var bNum = cp.b ? String(parseInt(cp.b, 10)) : '';
+      var key;
+      if (!cp.n) key = '番号未入力#' + p.seq;
+      else key = cp.n + '|' + bNum;
+      if (!groups[key]) { groups[key] = { n: cp.n, b: bNum, photos: [], noNum: !cp.n }; order.push(key); }
+      groups[key].photos.push(p);
+    });
+    var head = ['棟の名前', '組合員番号', '共済番号', '写真枚数', '撮影日', '最初の撮影日時(日本時間)', '最後の撮影日時(日本時間)', '担当者', '支所', '緯度', '経度', '精度(m)', '写真間の最大距離(m)', '要確認', '地図URL', 'アプリ版'];
+    var rows = [head.join(',')], skipped = 0, count = 0;
+    order.forEach(function (key) {
+      var g = groups[key];
+      var withFix = g.photos.filter(function (p) { return p.fix; });
+      if (!withFix.length) { skipped++; return; }
+      var wsum = 0, lat = 0, lon = 0, best = Infinity;
+      withFix.forEach(function (p) {
+        var acc = Math.max(1, p.fix.acc || 1), w = 1 / (acc * acc);
+        wsum += w; lat += p.fix.lat * w; lon += p.fix.lon * w; best = Math.min(best, acc);
+      });
+      var c = { lat: lat / wsum, lon: lon / wsum };
+      var spread = 0;
+      withFix.forEach(function (p) { spread = Math.max(spread, distM(c, p.fix)); });
+      var times = g.photos.map(function (p) { return p.date.getTime(); });
+      var first = new Date(Math.min.apply(null, times)), last = new Date(Math.max.apply(null, times));
+      var who = [], brs = [];
+      g.photos.forEach(function (p) { if (p.who && who.indexOf(p.who) < 0) who.push(p.who); if (p.branch && brs.indexOf(p.branch) < 0) brs.push(p.branch); });
+      var name = g.noNum ? '番号未入力-' + pad(g.photos[0].seq) : (g.b ? g.n + pad(g.b, 3) : g.n);
+      var warn = [];
+      if (g.noNum) warn.push('組合員番号が未入力');
+      else if (g.n.length !== 8) warn.push('組合員番号が8桁ではない');
+      if (spread > 50) warn.push('写真の位置が離れている');
+      if (withFix.length < g.photos.length) warn.push('位置のない写真あり');
+      rows.push([
+        csvText(name), csvText(g.n), csvText(g.b), String(g.photos.length), jstDay(first),
+        fmtJst(first), fmtJst(last), csvText(who.join('/')), csvText(brs.join('/')),
+        c.lat.toFixed(6), c.lon.toFixed(6), String(Math.round(best)), String(Math.round(spread)),
+        csvText(warn.join(' / ')),
+        csvText('https://www.google.com/maps?q=' + c.lat.toFixed(6) + ',' + c.lon.toFixed(6)),
+        csvText(APP_VERSION)
+      ].join(','));
+      count++;
+    });
+    return { blob: new Blob(['﻿' + rows.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' }), count: count, skipped: skipped };
+  }
+  function saveMapCsv() {
+    var r = buildMapCsv();
+    download(r.blob, 'mymap_' + stampJst(new Date()) + '.csv');
+    notice('マイマップ用CSVを保存しました(棟' + r.count + '件)。' + (r.skipped ? '位置情報のない棟' + r.skipped + '件は、入っていません。' : ''));
+  }
+
   function saveCsv() {
     download(buildCsvBlob(), 'photo-log_' + stampJst(new Date()) + '.csv');
   }
@@ -1462,6 +1530,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     $('mailBtn').disabled = st.photos.length === 0;
     updateFs();
     $('csvBtn').disabled = st.photos.length === 0;
+    $('mapCsvBtn').disabled = st.photos.length === 0;
   }
 
 
@@ -1514,12 +1583,14 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   $('fileIn').addEventListener('change', onFile);
   $('saveAll').addEventListener('click', saveAll);
   $('csvBtn').addEventListener('click', saveCsv);
+  $('mapCsvBtn').addEventListener('click', saveMapCsv);
   $('uploadBtn').addEventListener('click', uploadAll);
   $('mailBtn').addEventListener('click', openMail);
   $('mailClose').addEventListener('click', closeMail);
   $('mailAll').addEventListener('click', function () { st.photos.forEach(function (p) { mailState.selected[p.filename] = true; }); renderMail(); });
   $('mailNone').addEventListener('click', function () { mailState.selected = {}; renderMail(); });
   $('mailCsv').addEventListener('change', renderMail);
+  $('mailMap').addEventListener('change', renderMail);
   $('mailDraft').addEventListener('click', openMailDraft);
   $('mailCopy').addEventListener('click', function () {
     var to = mailTo();
