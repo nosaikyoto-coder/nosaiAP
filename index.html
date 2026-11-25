@@ -501,7 +501,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.11.24-6';
+  var APP_VERSION = '2026.11.25-1';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -1088,10 +1088,15 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
     accounts: {},
     scope: 'https://www.googleapis.com/auth/drive.file'
   };
-  /* メールで送るときの宛先(支所ごと)。ここに書いていない支所では、メールで送信は使えない。
-     試験のため、いまは本所だけ設定している。本番の宛先は、企画情報課が決めて、ここに書く。 */
+  /* メールで送るときの宛先(支所ごと)。ここに書いていない支所では、宛先なしでメールアプリが開く。 */
   var MAIL = {
-    to: { '本所': 'vovolove0527@gmail.com' },
+    to: {
+      '山城支所': 'yamashiro@kyoto-nosai.jp',
+      '京都支所': 'kyoto@kyoto-nosai.jp',
+      '中丹支所': 'chutan@kyoto-nosai.jp',
+      '丹後支所': 'tango@kyoto-nosai.jp',
+      '本所': 's-minamitani@kyoto-nosai.jp'
+    },
     batchBytes: 18 * 1024 * 1024,
     batchCount: 30
   };
