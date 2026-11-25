@@ -444,7 +444,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       <li>ブラウザが求める<strong>カメラと位置情報の許可</strong>を「許可」にしてください。</li>
       <li>日時は端末の時計を日本時間で表示しています。端末の日時が正しいか、撮影前に確認してください。</li>
       <li>写真は「保存」を押したときにダウンロード先へ保存されます。<strong>端末にもドライブにも保存していない写真は、ページを閉じると失われます。</strong></li>
-      <li>「マイマップ用CSV」は、写真を保存するときに自動で一緒に保存されます。写真ごとのSHA-256(改ざん確認用の値)も入っています。組合員番号と共済番号(棟番号)ごとに1行にまとめたもので、Googleマイマップに取り込むと、評価した棟ごとにピンが立ちます。</li>
+      <li>「マイマップ用CSV」は、写真を保存するときに自動で一緒に保存されます。1枚目の写真のSHA-256(改ざん確認用の値)も入っています。組合員番号と共済番号(棟番号)ごとに1行にまとめたもので、Googleマイマップに取り込むと、評価した棟ごとにピンが立ちます。</li>
       <li>写真は、「ドライブにアップロード」または「メールで送信」を押したときだけ、外部に送ります。ドライブは、この端末でログインしているGoogleアカウントです。メールは、選んだメールアプリから、支所ごとに決めた宛先に送ります。それ以外では外部へ送信しません。「保存」は端末への保存です(スマホ等では、こちらを使います)。「市区町村名を焼き付ける」をオンにした場合だけ、現在地の緯度経度(小数点以下4桁)を国土地理院のサービスに送ります。</li>
       <li>組合員番号は、申込書と見比べて、必ず確認してください。番号の読取は、8桁の数字だけを対象にした補助の機能で、通信が必要です。通信がないときは、手で入力してください。</li>
       <li>アプリの版: <span id="verApp"></span></li>
@@ -501,7 +501,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
   'use strict';
 
   /* アプリの版。内容を直したら、日付と枝番を更新する。 */
-  var APP_VERSION = '2026.11.25-1';
+  var APP_VERSION = '2026.11.26-1';
   /* 番号読取(OCR)のプログラムは、版を固定して、読取ボタンを押したときだけ読み込む。 */
   var TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -1430,7 +1430,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       if (!groups[key]) { groups[key] = { n: cp.n, b: bNum, photos: [], noNum: !cp.n }; order.push(key); }
       groups[key].photos.push(p);
     });
-    var head = ['棟の名前', '組合員番号', '共済番号', '写真枚数', '撮影日', '最初の撮影日時(日本時間)', '最後の撮影日時(日本時間)', '担当者', '支所', '経度', '緯度', '精度(m)', '写真間の最大距離(m)', '要確認', 'SHA-256(写真ごと)', '写真ファイル名', '地図URL', 'アプリ版'];
+    var head = ['棟の名前', '組合員番号', '共済番号', '写真枚数', '撮影日', '最初の撮影日時(日本時間)', '最後の撮影日時(日本時間)', '担当者', '支所', '経度', '緯度', '精度(m)', '写真間の最大距離(m)', '要確認', 'SHA-256(1枚目)', '写真ファイル名(1枚目)', '地図URL', 'アプリ版'];
     var rows = [head.join(',')], skipped = 0, count = 0;
     order.forEach(function (key) {
       var g = groups[key];
@@ -1448,6 +1448,7 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
       var first = new Date(Math.min.apply(null, times)), last = new Date(Math.max.apply(null, times));
       var who = [], brs = [];
       g.photos.forEach(function (p) { if (p.who && who.indexOf(p.who) < 0) who.push(p.who); if (p.branch && brs.indexOf(p.branch) < 0) brs.push(p.branch); });
+      var firstP = g.photos.slice().sort(function (a, b) { return a.date - b.date || a.seq - b.seq; })[0];
       var name = g.noNum ? '番号未入力-' + pad(g.photos[0].seq) : (g.b ? g.n + pad(g.b, 3) : g.n);
       var warn = [];
       if (g.noNum) warn.push('組合員番号が未入力');
@@ -1459,8 +1460,8 @@ button.small-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
         fmtJst(first), fmtJst(last), csvText(who.join('/')), csvText(brs.join('/')),
         c.lon.toFixed(6), c.lat.toFixed(6), String(Math.round(best)), String(Math.round(spread)),
         csvText(warn.join(' / ')),
-        csvText(g.photos.map(function (p) { return p.sha || ''; }).join(' / ')),
-        csvText(g.photos.map(function (p) { return p.filename || ''; }).join(' / ')),
+        csvText(firstP.sha || ''),
+        csvText(firstP.filename || ''),
         csvText('https://www.google.com/maps?q=' + c.lat.toFixed(6) + ',' + c.lon.toFixed(6)),
         csvText(APP_VERSION)
       ].join(','));
